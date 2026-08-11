@@ -1,0 +1,108 @@
+@import "tailwindcss";
+
+/* ==========================================================================
+   GROOMS ART — Design Tokens
+   Organic luxury / editorial photography design system.
+   ========================================================================== */
+@theme {
+  /* Brand palette */
+  --color-forest: #12372a;
+  --color-forest-deep: #0b241c;
+  --color-sage: #436850;
+  --color-sage-light: #6c8c76;
+  --color-sand: #f4f1ea;
+  --color-cream: #fbfada;
+  --color-charcoal: #111111;
+  --color-linen: #efe9de;
+
+  /* Typography */
+  --font-serif: "Cormorant Garamond", "Times New Roman", serif;
+  --font-sans: "Manrope", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-arabic: "Cairo", "Manrope", ui-sans-serif, sans-serif;
+
+  /* Cinematic, natural easing — no bounce, no cartoon overshoot */
+  --ease-cinematic: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --ease-editorial: cubic-bezier(0.16, 1, 0.3, 1);
+
+  --radius-frame: 2px;
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    background-color: var(--color-sand);
+  }
+
+  html[dir="rtl"] body {
+    font-family: var(--font-arabic);
+  }
+
+  body {
+    color: var(--color-charcoal);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  h1, h2, h3, h4, .font-display {
+    font-family: var(--font-serif);
+    font-weight: 500;
+    letter-spacing: -0.01em;
+  }
+
+  ::selection {
+    background: var(--color-forest);
+    color: var(--color-cream);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-forest);
+    outline-offset: 3px;
+  }
+}
+
+@layer components {
+  /* Fine linen / paper grain texture used behind editorial sections */
+  .texture-linen {
+    background-image:
+      repeating-linear-gradient(0deg, rgba(17,17,17,0.015) 0px, rgba(17,17,17,0.015) 1px, transparent 1px, transparent 3px),
+      repeating-linear-gradient(90deg, rgba(17,17,17,0.015) 0px, rgba(17,17,17,0.015) 1px, transparent 1px, transparent 3px);
+  }
+
+  /* Matted / museum-frame border, inspired by wood + mat framing */
+  .frame-mat {
+    padding: 0.6rem;
+    background: var(--color-cream);
+    box-shadow: 0 1px 2px rgba(17,17,17,0.06), 0 12px 32px -16px rgba(17,17,17,0.25);
+  }
+
+  /* Organic skeleton shimmer — slow, warm, non-mechanical */
+  .skeleton {
+    position: relative;
+    overflow: hidden;
+    background: linear-gradient(90deg, #eae6da 0%, #f2efe6 50%, #eae6da 100%);
+  }
+  .skeleton::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.55), transparent);
+    animation: shimmer 2.4s var(--ease-cinematic) infinite;
+  }
+  @keyframes shimmer {
+    100% { transform: translateX(100%); }
+  }
+
+  .divider-hairline {
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(17,17,17,0.18), transparent);
+  }
+}
+
+@layer utilities {
+  .will-change-transform-gpu {
+    will-change: transform;
+    transform: translateZ(0);
+  }
+}

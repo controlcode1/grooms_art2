@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://groomsart.com/sitemap.xml

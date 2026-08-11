@@ -1,0 +1,191 @@
+import type { Dictionary } from '../types'
+
+export const en: Dictionary = {
+  meta: {
+    siteName: 'Grooms Art',
+    tagline: 'Editorial wedding photography & cinematic films',
+  },
+  nav: {
+    home: 'Home',
+    portfolio: 'Portfolio',
+    fullDay: 'Full Day',
+    sessions: 'Sessions',
+    about: 'About',
+    book: 'Book a Session',
+    menu: 'Menu',
+    close: 'Close',
+  },
+  home: {
+    heroEyebrow: 'Grooms Art Studio',
+    heroTitle: 'Vows, wandered\ninto the wild.',
+    heroSubtitle:
+      'Editorial wedding photography and cinematic film, shot in natural light — for couples who want their story told honestly.',
+    heroCta: 'View the Portfolio',
+    heroSecondaryCta: 'Book a Session',
+    introEyebrow: 'The Studio',
+    introTitle: 'Unposed moments. Timeless frames.',
+    introBody:
+      "We don't direct performances — we follow the light, the wind, and the quiet seconds in between. Every gallery is a chronicle of a real day, kept honest.",
+    previewEyebrow: 'Selected Work',
+    previewTitle: 'From the archive',
+    previewCta: 'See the full portfolio',
+    testimonialsEyebrow: 'Kind Words',
+    testimonialsTitle: 'From the couples we\u2019ve walked beside',
+    footerFeedbackEyebrow: 'In Their Own Words',
+    footerCtaTitle: 'Your story, told in natural light.',
+    footerCtaBody:
+      'A limited number of full-day and destination sessions are taken each season.',
+    footerCtaButton: 'Check availability',
+  },
+  portfolio: {
+    eyebrow: 'Portfolio',
+    title: 'A running archive',
+    subtitle:
+      'Weddings, portraits, and cinematic shorts — filtered by the moment you\u2019re looking for.',
+    filters: {
+      all: 'All Work',
+      wedding: 'Weddings',
+      portrait: 'Portraits',
+      fullDay: 'Full Day',
+      cinematic: 'Cinematic Shorts',
+    },
+    loadMore: 'Load more',
+    emptyTitle: 'This gallery is still developing.',
+    emptyBody:
+      'Cinematic shorts from recent weddings are being edited in the studio right now. Check back soon, or explore the photography galleries.',
+    backToPortfolio: 'Back to Portfolio',
+    exif: 'Capture Details',
+  },
+  fullDay: {
+    eyebrow: 'The Full Day Experience',
+    title: 'One day, told in full.',
+    subtitle:
+      'From the first light of preparation to the last dance — a chronological account of full-day wedding coverage.',
+    chapters: {
+      morning: 'Morning Light',
+      ceremony: 'The Ceremony',
+      portraits: 'Portraits & Wandering',
+      golden: 'Golden Hour',
+      evening: 'Evening Celebration',
+    },
+    cinematicTitle: 'The Film',
+    cinematicBody:
+      'Every full-day booking includes a cinematic highlight film — a short, honest retelling of the day, cut to sound.',
+    packagesEyebrow: 'Full Day Collections',
+    packagesTitle: 'Choose Your Collection',
+    selectCta: 'Select Collection',
+    selected: 'Selected',
+    confirmTitle: 'Confirm Your Booking',
+    confirmBody: 'Review your selections and confirm your booking.',
+    confirmButton: 'Confirm Booking',
+    bookingSuccessTitle: 'Your booking is confirmed.',
+    bookingSuccessBody:
+      'A confirmation has been sent to your inbox. Our team will follow up within 48 hours with next steps.',
+  },
+  about: {
+    eyebrow: 'Our Story',
+    title: 'Behind Grooms Art',
+    intro:
+      'Grooms Art was founded on a simple belief: the truest wedding photographs are the ones nobody posed for.',
+    philosophyTitle: 'Artistic Vision',
+    philosophyBody:
+      'We work in natural light wherever possible, favour wide open landscapes over studio backdrops, and let real emotion lead the frame. Every gallery we deliver reads like a chapter, not a checklist.',
+    equipmentTitle: 'Equipment & Craft',
+    equipmentBody:
+      'Full-frame cinema cameras, prime lenses, and a deliberately small kit — so we can move quickly and stay unnoticed when it matters most.',
+    teamTitle: 'The People Behind the Lens',
+  },
+  booking: {
+    eyebrow: 'Book a Session',
+    title: 'Reserve your date',
+    subtitle:
+      'A guided, four-step process to secure your photography and film coverage.',
+    steps: {
+      package: 'Package',
+      date: 'Date',
+      addons: 'Add-ons',
+      deposit: 'Deposit',
+    },
+    package: {
+      title: 'Choose your package',
+      selectCta: 'Select package',
+      selected: 'Selected',
+    },
+    date: {
+      title: 'Choose your date',
+      helper: 'Availability updates in real time from our studio calendar.',
+      available: 'Available',
+      limited: 'Limited',
+      unavailable: 'Booked',
+    },
+    addons: {
+      title: 'Add optional extras',
+      skip: 'Continue without add-ons',
+    },
+    deposit: {
+      title: 'Secure your date',
+      body: 'A deposit confirms your booking. The remaining balance is due 14 days before your session.',
+      button: 'Pay deposit & confirm',
+    },
+    back: 'Back',
+    continue: 'Continue',
+    successTitle: 'Your date is reserved.',
+    successBody:
+      'A confirmation has been sent to your inbox. Our team will follow up within 48 hours with next steps.',
+    errorTitle: 'Something interrupted the booking.',
+    errorBody: 'Please try again, or reach us directly and we\u2019ll confirm your date by hand.',
+    retry: 'Try again',
+  },
+  customerInfo: {
+    title: 'Your Details',
+    subtitle: 'Just a few details so we can reach you after your booking.',
+    fullName: 'Full Name',
+    fullNamePlaceholder: 'Your full name',
+    phone: 'Phone Number',
+    phonePlaceholder: '+964 7XX XXX XXXX',
+    email: 'Email Address',
+    emailPlaceholder: 'your@email.com',
+    notes: 'Additional Notes',
+    notesPlaceholder: 'Any details about your session, venue, or special requests...',
+    required: 'Required',
+    optional: 'Optional',
+  },
+  sessions: {
+    eyebrow: 'Sessions',
+    title: 'Book Your Session',
+    selectCity: 'Select Your City',
+    cities: {
+      baghdad: 'Baghdad',
+      erbil: 'Erbil',
+    },
+    packageTitle: 'Choose Your Package',
+    mostPopular: 'Most Popular',
+    locationTitle: 'Select Your Location',
+    dateTitle: 'Choose Your Date',
+    dateHelper: 'Available dates for the next 12 months.',
+    available: 'Available',
+    booked: 'Booked',
+    back: 'Back',
+    continue: 'Continue',
+    confirmTitle: 'Confirm Your Booking',
+    confirmBody: 'Review your selections and confirm your session booking.',
+    confirmButton: 'Confirm Booking',
+    successTitle: 'Your session is booked.',
+    successBody:
+      'A confirmation has been sent to your inbox. Our team will follow up within 48 hours with next steps.',
+  },
+  footer: {
+    studio: 'Studio',
+    navigate: 'Navigate',
+    connect: 'Connect',
+    rights: 'All rights reserved.',
+    craftedBy: 'Grooms Art \u2014 organic luxury photography & film',
+  },
+  common: {
+    loading: 'Loading',
+    retry: 'Retry',
+    close: 'Close',
+    next: 'Next',
+    previous: 'Previous',
+  },
+}

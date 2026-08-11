@@ -1,0 +1,1502 @@
+import { createFileRoute, Link } from '@tanstack/react-router'
+import { useState, useEffect, useCallback, useMemo } from 'react'
+import { motion, AnimatePresence } from 'motion/react'
+import { clsx } from 'clsx'
+import { PalmEmblem } from '@/features/shared/components/PalmEmblem'
+import { useI18n } from '@/lib/i18n'
+import { storage, STORAGE_KEYS } from '@/lib/storage'
+import { supabase } from '@/lib/supabase/client'
+import {
+  getPortfolioImages,
+  savePortfolioImages,
+  getPortfolioCategories,
+  savePortfolioCategories,
+  DEFAULT_CATEGORIES,
+  type PortfolioImage,
+  type CategoryInfo,
+} from '@/lib/data/portfolio'
+import {
+  getLocationsForCity,
+  DEFAULT_LOCATIONS,
+  type Location,
+  type CityId,
+} from '@/lib/data/locations'
+import {
+  type Booking,
+  type BookingStatus,
+  type BookingType,
+  triggerWhatsApp,
+} from '@/lib/types/booking'
+
+export const Route = createFileRoute('/dashboard')({
+  head: () => ({
+    meta: [{ title: 'Dashboard — Grooms Art' }],
+  }),
+  component: DashboardPage,
+})
+
+// ─── Constants ──────────────────────────────────────────────────────────────
+const MONTH_FORMATTER = new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' })
+
+type DashboardTab = 'bookings' | 'availability' | 'portfolio'
+
+// ─── Client-side WebP Image Optimization ─────────────────────────────────────
+async function optimizeToWebP(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = (event) => {
+      const img = new Image()
+      img.onload = () => {
+        const canvas = document.createElement('canvas')
+        const maxW = 1200 // Max optimized width for speed & storage
+        let w = img.width
+        let h = img.height
+        if (w > maxW) {
+          h = Math.round((h * maxW) / w)
+          w = maxW
+        }
+        canvas.width = w
+        canvas.height = h
+        const ctx = canvas.getContext('2d')
+        if (!ctx) {
+          reject(new Error('Canvas context not available'))
+          return
+        }
+        ctx.drawImage(img, 0, 0, w, h)
+        // Convert to WebP data URL with 0.8 quality
+        const dataUrl = canvas.toDataURL('image/webp', 0.8)
+        resolve(dataUrl)
+      }
+      img.onerror = () => reject(new Error('Image loading failed'))
+      img.src = event.target?.result as string
+    }
+    reader.onerror = () => reject(new Error('File reading failed'))
+    reader.readAsDataURL(file)
+  })
+}
+
+// ─── Components ─────────────────────────────────────────────────────────────
+function StatCard({
+  label,
+  value,
+  sub,
+  accent,
+}: {
+  label: string
+  value: string | number
+  sub?: string
+  accent?: boolean
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+      className={clsx(
+        'rounded-2xl p-6 border',
+        accent
+          ? 'bg-forest text-cream border-forest/80'
+          : 'bg-white border-charcoal/10 text-charcoal',
+      )}
+    >
+      <p
+        className={clsx(
+          'font-sans text-[10px] tracking-[0.22em] uppercase mb-3',
+          accent ? 'text-cream/60' : 'text-charcoal/40',
+        )}
+      >
+        {label}
+      </p>
+      <p
+        className={clsx(
+          'font-serif text-4xl mb-1',
+          accent ? 'text-cream' : 'text-charcoal',
+        )}
+      >
+        {value}
+      </p>
+      {sub && (
+        <p
+          className={clsx(
+            'font-sans text-xs',
+            accent ? 'text-cream/50' : 'text-charcoal/40',
+          )}
+        >
+          {sub}
+        </p>
+      )}
+    </motion.div>
+  )
+}
+
+function SectionHeading({ title, desc }: { title: string; desc?: string }) {
+  return (
+    <div className="mb-6">
+      <h2 className="font-serif text-2xl text-charcoal">{title}</h2>
+      {desc && <p className="font-sans text-xs text-charcoal/50 mt-1">{desc}</p>}
+    </div>
+  )
+}
+
+// ─── Login Screen ────────────────────────────────────────────────────────────
+function LoginScreen({ onLogin }: { onLogin: () => void }) {
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [shake, setShake] = useState(false)
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError(null)
+    setLoading(true)
+
+    if (!supabase) {
+      setError('Supabase is not configured. Check your .env file.')
+      setLoading(false)
+      return
+    }
+
+    const { error: authError } = await supabase.auth.signInWithPassword({
+      email: email.trim(),
+      password,
+    })
+
+    setLoading(false)
+
+    if (authError) {
+      setError('Incorrect email or password. Please try again.')
+      setShake(true)
+      setTimeout(() => setShake(false), 600)
+    } else {
+      onLogin()
+    }
+  }
+
+  return (
+    <div className="min-h-screen bg-charcoal flex items-center justify-center px-6">
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
+        className="w-full max-w-sm"
+      >
+        <div className="flex items-center gap-3 mb-10">
+          <PalmEmblem className="w-8 h-8 text-sage" />
+          <span className="font-serif text-xl text-cream">Grooms Art</span>
+        </div>
+
+        <h1 className="font-serif text-3xl text-cream mb-2">Studio Access</h1>
+        <p className="font-sans text-sm text-cream/45 mb-10">
+          Private photographer dashboard — restricted access.
+        </p>
+
+        <motion.form
+          onSubmit={handleSubmit}
+          animate={shake ? { x: [-8, 8, -6, 6, -3, 3, 0] } : { x: 0 }}
+          transition={{ duration: 0.5 }}
+          className="space-y-4"
+        >
+          <label className="block">
+            <span className="font-sans text-[10px] tracking-[0.22em] uppercase text-cream/40 block mb-2">
+              Email
+            </span>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => { setEmail(e.target.value); setError(null) }}
+              placeholder="admin@groomsart.com"
+              className="w-full font-sans text-sm bg-white/05 border border-cream/10 rounded-xl px-4 py-3.5 text-cream placeholder:text-cream/20 outline-none transition-all duration-300 focus:border-sage/60 focus:bg-white/08"
+              autoFocus
+              autoComplete="email"
+            />
+          </label>
+
+          <label className="block">
+            <span className="font-sans text-[10px] tracking-[0.22em] uppercase text-cream/40 block mb-2">
+              Password
+            </span>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => { setPassword(e.target.value); setError(null) }}
+              placeholder="••••••••"
+              className={clsx(
+                'w-full font-sans text-sm bg-white/05 border rounded-xl px-4 py-3.5 text-cream placeholder:text-cream/20 outline-none transition-all duration-300',
+                error
+                  ? 'border-red-400/60 focus:border-red-400'
+                  : 'border-cream/10 focus:border-sage/60 focus:bg-white/08',
+              )}
+              autoComplete="current-password"
+            />
+            {error && (
+              <p className="font-sans text-xs text-red-400/80 mt-2">{error}</p>
+            )}
+          </label>
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full mt-2 font-sans text-xs tracking-[0.2em] uppercase bg-forest text-cream py-4 rounded-xl hover:bg-forest-deep transition-colors duration-500 disabled:opacity-50"
+          >
+            {loading ? 'Signing in…' : 'Enter Dashboard'}
+          </button>
+        </motion.form>
+      </motion.div>
+    </div>
+  )
+}
+
+// ─── Dashboard Local Translations ───────────────────────────────────────────
+const DASHBOARD_T = {
+  en: {
+    bookings: 'Bookings',
+    availability: 'Availability',
+    portfolio: 'Portfolio',
+    totalBookings: 'Total Bookings',
+    pendingApproval: 'Pending Approval',
+    baghdad: 'Baghdad',
+    erbil: 'Erbil',
+    all: 'All',
+    pending: 'Pending',
+    confirmed: 'Confirmed',
+    approved: 'Approved',
+    bookedOn: 'Booked on',
+    fullDay: 'Full Day',
+    session: 'Session',
+    customer: 'Customer',
+    phone: 'Phone',
+    email: 'Email',
+    cityPackage: 'City & Package',
+    locationId: 'Location ID',
+    targetDate: 'Target Date',
+    notes: 'Notes',
+    sendWelcome: '💬 Send Welcome & Deposit',
+    welcomeSent: '✓ Welcome & Deposit Sent',
+    sendFinal: '💬 Send Final Confirm',
+    bookingApproved: '✓ Booking Approved',
+    deleteRecord: 'Delete Record',
+    noBookings: 'No bookings match this filter',
+    // Availability
+    dateBlocking: 'Date Blocking',
+    dateBlockingDesc: 'Click dates on the calendar to toggle blocked/unblocked status for bookings.',
+    blockedDatesList: 'Blocked Dates List',
+    noBlockedDates: 'No blocked dates. Click dates on the calendar to block them.',
+    unblock: 'Unblock',
+    locationsManagement: 'Locations Management',
+    locationsManagementDesc: 'Manage available locations for Baghdad and Erbil booking flows separately.',
+    addLocationTo: 'Add Location to',
+    addLocationOption: 'Add Location Option',
+    nameEn: 'English Name',
+    nameAr: 'Arabic Name',
+    descEn: 'English Description',
+    descAr: 'Arabic Description',
+    remove: 'Remove',
+    // Portfolio
+    portfolioCategories: 'Portfolio Categories',
+    portfolioCategoriesDesc: 'Add new sections to your gallery archive.',
+    catCode: 'Category Code (e.g. weddings)',
+    catNameEn: 'English Category Name',
+    catNameAr: 'Arabic Category Name',
+    createCat: 'Create Category',
+    uploadImages: 'Upload Portfolio Images',
+    uploadDesc: 'Select one or more images. Automatic conversion to optimized WebP.',
+    emptyCat: 'This category has no images yet. Upload some images above to showcase them.',
+    deleteCat: 'Delete Category',
+    rename: 'Rename',
+    save: 'Save',
+    cancel: 'Cancel',
+  },
+  ar: {
+    bookings: 'الحجوزات',
+    availability: 'التوفر',
+    portfolio: 'الأعمال',
+    totalBookings: 'إجمالي الحجوزات',
+    pendingApproval: 'قيد الانتظار',
+    baghdad: 'بغداد',
+    erbil: 'أربيل',
+    all: 'الكل',
+    pending: 'قيد الانتظار',
+    confirmed: 'مؤكد مبدئياً',
+    approved: 'مؤكد نهائياً',
+    bookedOn: 'تم الحجز في',
+    fullDay: 'يوم كامل',
+    session: 'جلسة',
+    customer: 'الزبون',
+    phone: 'الهاتف',
+    email: 'البريد الإلكتروني',
+    cityPackage: 'المدينة والباقة',
+    locationId: 'رمز الموقع',
+    targetDate: 'التاريخ المحدد',
+    notes: 'الملاحظات',
+    sendWelcome: '💬 إرسال الترحيب والعربون',
+    welcomeSent: '✓ تم إرسال الترحيب والعربون',
+    sendFinal: '💬 إرسال التأكيد النهائي',
+    bookingApproved: '✓ تم تأكيد الحجز',
+    deleteRecord: 'حذف السجل',
+    noBookings: 'لا توجد حجوزات تطابق التصفية',
+    // Availability
+    dateBlocking: 'حظر التواريخ',
+    dateBlockingDesc: 'اضغط على التواريخ في التقويم لتبديل حالة الحظر للحجوزات.',
+    blockedDatesList: 'قائمة التواريخ المحظورة',
+    noBlockedDates: 'لا توجد تواريخ محظورة. اضغط على التواريخ في التقويم لحظرها.',
+    unblock: 'إلغاء الحظر',
+    locationsManagement: 'إدارة المواقع',
+    locationsManagementDesc: 'إدارة المواقع المتاحة لكل من بغداد وأربيل بشكل منفصل.',
+    addLocationTo: 'إضافة موقع إلى',
+    addLocationOption: 'إضافة خيار موقع',
+    nameEn: 'الاسم بالإنجليزية',
+    nameAr: 'الاسم بالعربية',
+    descEn: 'الوصف بالإنجليزية',
+    descAr: 'الوصف بالعربية',
+    remove: 'حذف',
+    // Portfolio
+    portfolioCategories: 'تصنيفات الأعمال',
+    portfolioCategoriesDesc: 'أضف أقساماً جديدة إلى معرض أعمالك.',
+    catCode: 'رمز التصنيف (مثلاً weddings)',
+    catNameEn: 'اسم التصنيف بالإنجليزية',
+    catNameAr: 'اسم التصنيف بالعربية',
+    createCat: 'إنشاء تصنيف',
+    uploadImages: 'رفع صور الأعمال',
+    uploadDesc: 'اختر صورة واحدة أو أكثر. تحويل تلقائي إلى WebP محسن.',
+    emptyCat: 'لا توجد صور في هذا التصنيف بعد. ارفع بعض الصور أعلاه لعرضها.',
+    deleteCat: 'حذف التصنيف',
+    rename: 'إعادة تسمية',
+    save: 'حفظ',
+    cancel: 'إلغاء',
+  },
+}
+
+// ─── WhatsApp Integration & Booking Price Helpers ───────────────────────────
+const PACKAGE_NAMES: Record<string, string> = {
+  essential: 'Essential Collection',
+  signature: 'Signature Collection',
+  premium: 'Premium Collection',
+  vip: 'VIP Collection',
+  royal: 'Royal Collection',
+}
+
+function getBookingPrice(type: 'session' | 'full-day', packageId: string, city: string): string {
+  const isErbil = city === 'erbil'
+  if (type === 'full-day') {
+    const base = packageId === 'royal' ? 3200 : 1800
+    const finalPrice = isErbil ? base + 300 : base
+    return `$${finalPrice.toLocaleString()}`
+  } else {
+    // Session
+    let base = 250
+    if (packageId === 'signature') base = 400
+    if (packageId === 'premium') base = 600
+    const finalPrice = isErbil ? base + 200 : base
+    return `$${finalPrice.toLocaleString()}`
+  }
+}
+
+function formatWhatsAppPhone(phone: string): string {
+  let cleaned = phone.replace(/[^0-9]/g, '')
+  if (cleaned.startsWith('00')) {
+    cleaned = cleaned.substring(2)
+  }
+  if (cleaned.startsWith('0')) {
+    cleaned = '964' + cleaned.substring(1)
+  }
+  if (!cleaned.startsWith('964') && cleaned.length === 10 && cleaned.startsWith('7')) {
+    cleaned = '964' + cleaned
+  }
+  return cleaned
+}
+
+function getWelcomeWhatsAppLink(b: Booking): string {
+  const cleanPhone = formatWhatsAppPhone(b.customerInfo.phone)
+  const pkgName = PACKAGE_NAMES[b.packageId] ?? b.packageId
+  const price = getBookingPrice(b.type, b.packageId, b.city)
+
+  const messageText = `✨ *Welcome to Grooms Art Studio / أهلاً بكِ في استوديو Grooms Art* 🌿\n\n` +
+    `We are thrilled to confirm your booking details:\n` +
+    `يسعدنا جداً تأكيد تفاصيل حجزكِ معنا:\n\n` +
+    `• *Name / الاسم:* ${b.customerInfo.fullName}\n` +
+    `• *Date / التاريخ:* ${b.date}\n` +
+    `• *Package / الباقة:* ${pkgName}\n` +
+    `• *Price / السعر:* ${price}\n\n` +
+    `To finalize your booking and secure the date, please transfer the deposit to the following card:\n` +
+    `لتأكيد الحجز وتثبيت التاريخ بشكل رسمي، يرجى تحويل مبلغ العربون إلى الحساب التالي:\n` +
+    `💳 *Card Number / رقم الكارت:* [CARD_NUMBER_HERE]\n\n` +
+    `Please reply with a screenshot of the transfer once completed. 🤍\n` +
+    `يرجى إرسال لقطة شاشة للتحويل هنا فور إتمامه.`
+
+  return `https://wa.me/${cleanPhone}?text=${encodeURIComponent(messageText)}`
+}
+
+function getFinalConfirmationWhatsAppLink(b: Booking): string {
+  const cleanPhone = formatWhatsAppPhone(b.customerInfo.phone)
+  
+  const messageText = `✨ *Grooms Art Studio — Booking Confirmed* 🌿\n\n` +
+    `We have successfully received your deposit transfer. Your booking is now *fully confirmed* and your date is officially reserved! 🎉\n` +
+    `تم استلام مبلغ العربون بنجاح. حجزكِ الآن *مؤكد بالكامل* وتم تثبيت تاريخكِ رسمياً! 🎉\n\n` +
+    `We look forward to capturing your beautiful moments. See you soon! 🤍\n` +
+    `نتطلع بشوق لتوثيق لحظاتكم الجميلة. نراكم قريباً!`
+
+  return `https://wa.me/${cleanPhone}?text=${encodeURIComponent(messageText)}`
+}
+
+function Dashboard({ onLogout }: { onLogout: () => void }) {
+  const { locale, toggleLocale } = useI18n()
+  const d = locale === 'ar' ? DASHBOARD_T.ar : DASHBOARD_T.en
+  const [activeTab, setActiveTab] = useState<DashboardTab>('bookings')
+
+  // ─── State for Bookings ───
+  const [bookings, setBookings] = useState<Booking[]>([])
+  const [bookingFilter, setBookingFilter] = useState<'all' | 'pending' | 'confirmed' | 'approved'>('all')
+
+  const reloadBookings = useCallback(() => {
+    setBookings(storage.get<Booking[]>(STORAGE_KEYS.bookings) || [])
+  }, [])
+
+  useEffect(() => {
+    reloadBookings()
+  }, [reloadBookings])
+
+  const updateBookingStatus = (id: string, newStatus: BookingStatus) => {
+    const updated = bookings.map((b) => {
+      if (b.id === id) {
+        const item = { ...b, status: newStatus }
+        if (newStatus === 'confirmed') {
+          triggerWhatsApp(item)
+          item.whatsappTriggered = true
+        }
+        return item
+      }
+      return b
+    })
+    storage.set(STORAGE_KEYS.bookings, updated)
+    setBookings(updated)
+  }
+
+  const deleteBooking = (id: string) => {
+    if (!confirm('Are you sure you want to delete this booking record?')) return
+    const updated = bookings.filter((b) => b.id !== id)
+    storage.set(STORAGE_KEYS.bookings, updated)
+    setBookings(updated)
+  }
+
+  const handleWelcomeSend = (b: Booking) => {
+    window.open(getWelcomeWhatsAppLink(b), '_blank')
+    updateBookingStatus(b.id, 'confirmed')
+  }
+
+  const handleFinalSend = (b: Booking) => {
+    window.open(getFinalConfirmationWhatsAppLink(b), '_blank')
+    updateBookingStatus(b.id, 'approved')
+  }
+
+  // ─── State for Availability ───
+  const [blockedDates, setBlockedDates] = useState<string[]>([])
+  const [newBlockedDate, setNewBlockedDate] = useState('')
+  const [selectedCity, setSelectedCity] = useState<CityId>('baghdad')
+  const [locationsMap, setLocationsMap] = useState<Record<CityId, Location[]>>(DEFAULT_LOCATIONS)
+  const [newLocName, setNewLocName] = useState('')
+  const [newLocNameAr, setNewLocNameAr] = useState('')
+  const [newLocDesc, setNewLocDesc] = useState('')
+  const [newLocDescAr, setNewLocDescAr] = useState('')
+
+  const today = useMemo(() => {
+    const d = new Date()
+    d.setHours(0, 0, 0, 0)
+    return d
+  }, [])
+
+  const [availCursor, setAvailCursor] = useState(() => ({
+    year: today.getFullYear(),
+    month: today.getMonth(),
+  }))
+
+  const toLocalISODate = (date: Date): string => {
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+  };
+
+  const availCells = useMemo(() => {
+    const firstDay = new Date(availCursor.year, availCursor.month, 1).getDay()
+    const daysInMonth = new Date(availCursor.year, availCursor.month + 1, 0).getDate()
+    const grid: { iso: string | null; day: number | null; isToday: boolean; isBlocked: boolean; isPast: boolean }[] = []
+
+    // Leading empty cells
+    for (let i = 0; i < firstDay; i++) {
+      grid.push({ iso: null, day: null, isToday: false, isBlocked: false, isPast: false })
+    }
+
+    // Day cells
+    const todayIso = toLocalISODate(today)
+    for (let d = 1; d <= daysInMonth; d++) {
+      const date = new Date(availCursor.year, availCursor.month, d)
+      const iso = toLocalISODate(date)
+      const isBlocked = blockedDates.includes(iso)
+      const isToday = iso === todayIso
+      const isPast = iso < todayIso
+      grid.push({ iso, day: d, isToday, isBlocked, isPast })
+    }
+
+    // Trailing cells
+    while (grid.length % 7 !== 0) {
+      grid.push({ iso: null, day: null, isToday: false, isBlocked: false, isPast: false })
+    }
+
+    return grid
+  }, [availCursor, blockedDates, today])
+
+  const reloadAvailability = useCallback(() => {
+    setBlockedDates(storage.get<string[]>(STORAGE_KEYS.blockedDates) || [])
+    const storedLocs = storage.get<Record<CityId, Location[]>>(STORAGE_KEYS.locations)
+    if (storedLocs) {
+      setLocationsMap(storedLocs)
+    } else {
+      setLocationsMap(DEFAULT_LOCATIONS)
+    }
+  }, [])
+
+  useEffect(() => {
+    reloadAvailability()
+  }, [reloadAvailability])
+
+  const blockDate = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!newBlockedDate) return
+    if (blockedDates.includes(newBlockedDate)) {
+      alert('This date is already blocked.')
+      return
+    }
+    const updated = [...blockedDates, newBlockedDate].sort()
+    storage.set(STORAGE_KEYS.blockedDates, updated)
+    setBlockedDates(updated)
+    setNewBlockedDate('')
+  }
+
+  const unblockDate = (dateStr: string) => {
+    const updated = blockedDates.filter((d) => d !== dateStr)
+    storage.set(STORAGE_KEYS.blockedDates, updated)
+    setBlockedDates(updated)
+  }
+
+  const toggleBlockDate = (dateStr: string) => {
+    let updated: string[]
+    if (blockedDates.includes(dateStr)) {
+      updated = blockedDates.filter((d) => d !== dateStr)
+    } else {
+      updated = [...blockedDates, dateStr].sort()
+    }
+    storage.set(STORAGE_KEYS.blockedDates, updated)
+    setBlockedDates(updated)
+  }
+
+  const addLocation = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!newLocName.trim() || !newLocNameAr.trim()) return
+
+    const newLoc: Location = {
+      id: `loc-${Date.now()}`,
+      name: newLocName.trim(),
+      nameAr: newLocNameAr.trim(),
+      description: newLocDesc.trim(),
+      descriptionAr: newLocDescAr.trim(),
+    }
+
+    const currentCityLocs = locationsMap[selectedCity] || []
+    const updatedCityLocs = [...currentCityLocs, newLoc]
+    const updatedMap = { ...locationsMap, [selectedCity]: updatedCityLocs }
+
+    storage.set(STORAGE_KEYS.locations, updatedMap)
+    setLocationsMap(updatedMap)
+
+    // Reset fields
+    setNewLocName('')
+    setNewLocNameAr('')
+    setNewLocDesc('')
+    setNewLocDescAr('')
+  }
+
+  const deleteLocation = (locId: string) => {
+    if (!confirm('Are you sure you want to delete this location?')) return
+    const currentCityLocs = locationsMap[selectedCity] || []
+    const updatedCityLocs = currentCityLocs.filter((l) => l.id !== locId)
+    const updatedMap = { ...locationsMap, [selectedCity]: updatedCityLocs }
+
+    storage.set(STORAGE_KEYS.locations, updatedMap)
+    setLocationsMap(updatedMap)
+  }
+
+  // ─── State for Portfolio ───
+  const [categories, setCategories] = useState<CategoryInfo[]>([])
+  const [portfolioImgs, setPortfolioImgs] = useState<PortfolioImage[]>([])
+  const [newCatId, setNewCatId] = useState('')
+  const [newCatName, setNewCatName] = useState('')
+  const [newCatNameAr, setNewCatNameAr] = useState('')
+  const [renamingCatId, setRenamingCatId] = useState<string | null>(null)
+  const [renameNameEn, setRenameNameEn] = useState('')
+  const [renameNameAr, setRenameNameAr] = useState('')
+  const [uploading, setUploading] = useState(false)
+
+  const reloadPortfolio = useCallback(() => {
+    setCategories(getPortfolioCategories())
+    setPortfolioImgs(getPortfolioImages())
+  }, [])
+
+  useEffect(() => {
+    reloadPortfolio()
+  }, [reloadPortfolio])
+
+  const createCategory = (e: React.FormEvent) => {
+    e.preventDefault()
+    const id = newCatId.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-')
+    if (!id || !newCatName.trim()) return
+
+    if (categories.some((c) => c.id === id)) {
+      alert('Category ID already exists.')
+      return
+    }
+
+    const newCat: CategoryInfo = {
+      id,
+      name: newCatName.trim(),
+      nameAr: newCatNameAr.trim() || newCatName.trim(),
+    }
+
+    const updated = [...categories, newCat]
+    savePortfolioCategories(updated)
+    setCategories(updated)
+
+    setNewCatId('')
+    setNewCatName('')
+    setNewCatNameAr('')
+  }
+
+  const renameCategory = (id: string) => {
+    if (!renameNameEn.trim()) return
+    const updated = categories.map((c) => {
+      if (c.id === id) {
+        return {
+          ...c,
+          name: renameNameEn.trim(),
+          nameAr: renameNameAr.trim() || renameNameEn.trim(),
+        }
+      }
+      return c
+    })
+    savePortfolioCategories(updated)
+    setCategories(updated)
+    setRenamingCatId(null)
+  }
+
+  const deleteCategory = (catId: string) => {
+    // Check if there are any images in this category
+    const hasImages = portfolioImgs.some((img) => img.category === catId)
+    if (hasImages) {
+      alert('This category contains images. You cannot delete it until all its images are removed.')
+      return
+    }
+
+    if (!confirm('Are you sure you want to delete this category?')) return
+    const updated = categories.filter((c) => c.id !== catId)
+    savePortfolioCategories(updated)
+    setCategories(updated)
+  }
+
+  const deletePortfolioImage = (imgId: string) => {
+    if (!confirm('Are you sure you want to remove this image?')) return
+    const customImgs = storage.get<PortfolioImage[]>(STORAGE_KEYS.portfolioImages) || []
+    const updatedCustom = customImgs.filter((img) => img.id !== imgId)
+    savePortfolioImages(updatedCustom)
+    setPortfolioImgs(getPortfolioImages())
+  }
+
+  const handleImageUpload = async (catId: string, files: FileList | null) => {
+    if (!files || files.length === 0) return
+    setUploading(true)
+    try {
+      const customImgs = storage.get<PortfolioImage[]>(STORAGE_KEYS.portfolioImages) || []
+      const newItems: PortfolioImage[] = []
+
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i]
+        const dataUrl = await optimizeToWebP(file)
+        const id = dataUrl
+        const title = file.name.replace(/\.[^/.]+$/, '') // file name without ext
+
+        const newItem: PortfolioImage = {
+          id,
+          slug: title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''),
+          title,
+          alt: `${title} - portfolio upload`,
+          category: catId,
+          partOfFullDay: false,
+          orientation: 'landscape',
+          exif: {
+            camera: 'Unknown',
+            lens: 'Unknown',
+            focalLength: '—',
+            aperture: '—',
+            shutter: '—',
+            iso: '—',
+          },
+        }
+        newItems.push(newItem)
+      }
+
+      const updated = [...newItems, ...customImgs]
+      savePortfolioImages(updated)
+      setPortfolioImgs(getPortfolioImages())
+    } catch (err) {
+      console.error(err)
+      alert('Failed to optimize or upload images.')
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  // Stats Calculations
+  const totalBaghdad = bookings.filter((b) => b.city === 'baghdad').length
+  const totalErbil = bookings.filter((b) => b.city === 'erbil').length
+  const pendingCount = bookings.filter((b) => b.status === 'pending').length
+
+  const filteredBookings = useMemo(() => {
+    if (bookingFilter === 'all') return bookings
+    return bookings.filter((b) => b.status === bookingFilter)
+  }, [bookings, bookingFilter])
+
+  return (
+    <div className="min-h-screen bg-[#F5F3EE]" dir="ltr">
+      {/* Header bar */}
+      <header className="fixed inset-x-0 top-0 z-50 p-4 md:p-6 flex justify-center">
+        <div className="w-full max-w-6xl flex items-center justify-between px-6 md:px-10 py-3.5 rounded-full bg-[#F5F3EE]/20 backdrop-blur-md border border-charcoal/08 shadow-sm">
+          <Link to="/" className="block py-0.5 transition-opacity duration-300 hover:opacity-85">
+            <img
+              src="/images/logo.png"
+              alt="Grooms Art Logo"
+              className="h-8 md:h-9 w-auto object-contain"
+            />
+          </Link>
+          <div className="flex items-center gap-6">
+            <button
+              type="button"
+              onClick={toggleLocale}
+              className="font-sans text-xs tracking-[0.2em] uppercase text-charcoal/60 hover:text-charcoal transition-colors duration-300"
+              aria-label="Toggle language"
+            >
+              {locale === 'en' ? 'AR' : 'EN'}
+            </button>
+            <Link
+              to="/"
+              className="font-sans text-xs tracking-[0.2em] uppercase text-charcoal/60 hover:text-charcoal transition-colors duration-300"
+            >
+              Home
+            </Link>
+            <button
+              type="button"
+              onClick={onLogout}
+              className="font-sans text-xs tracking-[0.2em] uppercase text-charcoal/60 hover:text-charcoal transition-colors duration-300"
+            >
+              Sign Out
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <main className="max-w-6xl mx-auto px-6 md:px-10 pt-28 pb-10">
+        {/* Navigation Tabs */}
+        <div className="flex gap-1 mb-8 bg-white rounded-xl p-1 border border-charcoal/08 w-fit shadow-sm">
+          {(['bookings', 'availability', 'portfolio'] as DashboardTab[]).map((t) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => setActiveTab(t)}
+              className={clsx(
+                'font-sans text-xs tracking-[0.15em] uppercase px-4 py-2.5 rounded-lg transition-all duration-300',
+                activeTab === t
+                  ? 'bg-forest text-cream shadow-sm'
+                  : 'text-charcoal/50 hover:text-charcoal',
+              )}
+            >
+              {t === 'bookings'
+                ? `${d.bookings} (${pendingCount} ${d.pending.toLowerCase()})`
+                : t === 'availability'
+                  ? d.availability
+                  : d.portfolio}
+            </button>
+          ))}
+        </div>
+
+        {/* ─── TAB: BOOKINGS ─── */}
+        {activeTab === 'bookings' && (
+          <div>
+            {/* Quick Stats */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+              <StatCard label={d.totalBookings} value={bookings.length} accent />
+              <StatCard label={d.pendingApproval} value={pendingCount} />
+              <StatCard label={d.baghdad} value={totalBaghdad} sub={d.bookings.toLowerCase()} />
+              <StatCard label={d.erbil} value={totalErbil} sub={d.bookings.toLowerCase()} />
+            </div>
+
+            {/* Filter */}
+            <div className="flex gap-2 mb-6 flex-wrap">
+              {['all', 'pending', 'confirmed', 'approved'].map((f) => (
+                <button
+                  key={f}
+                  type="button"
+                  onClick={() => setBookingFilter(f as any)}
+                  className={clsx(
+                    'font-sans text-[10px] tracking-[0.15em] uppercase px-3 py-1.5 rounded-md border transition-all',
+                    bookingFilter === f
+                      ? 'bg-charcoal text-cream border-charcoal'
+                      : 'bg-white text-charcoal/60 border-charcoal/15 hover:border-charcoal/30',
+                  )}
+                >
+                  {d[f as keyof typeof d] || f}
+                </button>
+              ))}
+            </div>
+
+            {/* Bookings List */}
+            {filteredBookings.length === 0 ? (
+              <div className="bg-white border border-charcoal/10 rounded-2xl p-12 text-center">
+                <p className="font-serif text-xl text-charcoal/40">{d.noBookings}</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {filteredBookings.map((b) => (
+                  <div
+                     key={b.id}
+                     className="bg-white border border-charcoal/10 rounded-xl p-6 shadow-sm flex flex-col md:flex-row md:items-start justify-between gap-6"
+                  >
+                    <div className="space-y-4 flex-1">
+                      <div className="flex items-center gap-3 flex-wrap">
+                        <span
+                          className={clsx(
+                            'font-sans text-[9px] tracking-[0.15em] uppercase px-2 py-0.5 rounded',
+                            b.type === 'full-day'
+                              ? 'bg-forest/10 text-forest'
+                              : 'bg-sage/15 text-forest/85',
+                          )}
+                        >
+                          {b.type === 'full-day' ? d.fullDay : d.session}
+                        </span>
+                        <span
+                          className={clsx(
+                            'font-sans text-[9px] tracking-[0.15em] uppercase px-2 py-0.5 rounded',
+                            b.status === 'pending' && 'bg-yellow-100 text-yellow-800',
+                            b.status === 'confirmed' && 'bg-blue-100 text-blue-800',
+                            b.status === 'approved' && 'bg-green-100 text-green-800',
+                          )}
+                        >
+                          {d[b.status as keyof typeof d] || b.status}
+                        </span>
+                        <span className="font-sans text-xs text-charcoal/40">
+                          {d.bookedOn} {new Date(b.createdAt).toLocaleDateString()}
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-y-4 gap-x-6">
+                        <div>
+                          <p className="font-sans text-[9px] tracking-wider text-charcoal/40 uppercase mb-0.5">
+                            {d.customer}
+                          </p>
+                          <p className="font-serif text-lg text-charcoal">{b.customerInfo.fullName}</p>
+                        </div>
+                        <div>
+                          <p className="font-sans text-[9px] tracking-wider text-charcoal/40 uppercase mb-0.5">
+                            {d.phone}
+                          </p>
+                          <a href={`tel:${b.customerInfo.phone}`} className="font-sans text-sm text-forest underline">
+                            {b.customerInfo.phone}
+                          </a>
+                        </div>
+                        <div>
+                          <p className="font-sans text-[9px] tracking-wider text-charcoal/40 uppercase mb-0.5">
+                            {d.email}
+                          </p>
+                          <p className="font-sans text-sm text-charcoal">{b.customerInfo.email || '—'}</p>
+                        </div>
+                        <div>
+                          <p className="font-sans text-[9px] tracking-wider text-charcoal/40 uppercase mb-0.5">
+                            {d.cityPackage}
+                          </p>
+                          <p className="font-sans text-sm text-charcoal capitalize">
+                            {d[b.city as keyof typeof d] || b.city} · {b.packageId ? (locale === 'ar' ? (b.packageId === 'essential' ? 'المجموعة الأساسية' : b.packageId === 'signature' ? 'المجموعة المميزة' : b.packageId === 'premium' ? 'المجموعة الفاخرة' : b.packageId === 'vip' ? 'مجموعة كبار الشخصيات' : 'المجموعة الملكية') : PACKAGE_NAMES[b.packageId] ?? b.packageId) : '—'}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="font-sans text-[9px] tracking-wider text-charcoal/40 uppercase mb-0.5">
+                            {d.locationId}
+                          </p>
+                          <p className="font-sans text-sm text-charcoal">{b.location}</p>
+                        </div>
+                        <div>
+                          <p className="font-sans text-[9px] tracking-wider text-charcoal/40 uppercase mb-0.5">
+                            {d.targetDate}
+                          </p>
+                          <p className="font-sans text-sm text-forest font-semibold">{b.date}</p>
+                        </div>
+                      </div>
+
+                      {b.customerInfo.notes && (
+                        <div className="pt-2 border-t border-charcoal/05">
+                          <p className="font-sans text-[9px] tracking-wider text-charcoal/40 uppercase mb-1">
+                            {d.notes}
+                          </p>
+                          <p className="font-sans text-xs text-charcoal/70 bg-linen/40 p-3 rounded-lg leading-relaxed">
+                            {b.customerInfo.notes}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex flex-col gap-2 justify-end shrink-0 pt-4 md:pt-0 border-t md:border-t-0 border-charcoal/05 w-full md:w-52 animate-fadeIn">
+                      {/* Welcome & Deposit Button */}
+                      {b.status === 'pending' ? (
+                        <button
+                          type="button"
+                          onClick={() => handleWelcomeSend(b)}
+                          className="w-full font-sans text-[10px] tracking-[0.12em] uppercase bg-red-600 text-cream hover:bg-red-700 px-3 py-2.5 rounded-lg transition-colors font-medium text-center"
+                        >
+                          {d.sendWelcome}
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled
+                          className="w-full font-sans text-[10px] tracking-[0.12em] uppercase bg-charcoal/05 text-charcoal/30 px-3 py-2.5 rounded-lg cursor-not-allowed text-center"
+                        >
+                          {d.welcomeSent}
+                        </button>
+                      )}
+
+                      {/* Send Final Confirm Button */}
+                      {b.status === 'pending' && (
+                        <button
+                          type="button"
+                          disabled
+                          className="w-full font-sans text-[10px] tracking-[0.12em] uppercase bg-charcoal/05 text-charcoal/30 px-3 py-2.5 rounded-lg cursor-not-allowed text-center"
+                        >
+                          {d.sendFinal}
+                        </button>
+                      )}
+                      {b.status === 'confirmed' && (
+                        <button
+                          type="button"
+                          onClick={() => handleFinalSend(b)}
+                          className="w-full font-sans text-[10px] tracking-[0.12em] uppercase bg-forest text-cream hover:bg-forest-deep px-3 py-2.5 rounded-lg transition-colors font-semibold text-center"
+                        >
+                          {d.sendFinal}
+                        </button>
+                      )}
+                      {b.status === 'approved' && (
+                        <button
+                          type="button"
+                          disabled
+                          className="w-full font-sans text-[10px] tracking-[0.12em] uppercase bg-yellow-400 text-yellow-950 px-3 py-2.5 rounded-lg cursor-not-allowed font-semibold text-center"
+                        >
+                          {d.bookingApproved}
+                        </button>
+                      )}
+
+                      {/* Delete Record Button */}
+                      <button
+                        type="button"
+                        onClick={() => deleteBooking(b.id)}
+                        className="w-full font-sans text-[10px] tracking-[0.15em] uppercase bg-black text-white hover:bg-charcoal px-3 py-2.5 rounded-lg transition-colors text-center"
+                      >
+                        {d.deleteRecord}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ─── TAB: AVAILABILITY & LOCATIONS ─── */}
+        {activeTab === 'availability' && (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            {/* Blocked Dates (completely shadowless) */}
+            <div className="bg-white border border-charcoal/10 rounded-2xl p-6 lg:col-span-1 h-fit">
+              <SectionHeading
+                title={d.dateBlocking}
+                desc={d.dateBlockingDesc}
+              />
+
+              {/* Premium Dashboard Calendar */}
+              <div className="border border-charcoal/10 rounded-2xl overflow-hidden bg-white mb-6">
+                {/* Month navigation */}
+                <div className="flex items-center justify-between px-4 py-4 border-b border-charcoal/08 bg-sand/10">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setAvailCursor(({ year, month }) =>
+                        month === 0 ? { year: year - 1, month: 11 } : { year, month: month - 1 },
+                      )
+                    }
+                    className="w-7 h-7 rounded-full flex items-center justify-center text-charcoal/60 hover:bg-forest/05 hover:text-forest active:scale-95 transition-all duration-300"
+                    aria-label="Previous month"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                      <path d="M10 12L6 8l4-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </button>
+
+                  <AnimatePresence mode="wait">
+                    <motion.p
+                      key={`${availCursor.year}-${availCursor.month}`}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.2 }}
+                      className="font-serif text-sm text-charcoal font-medium"
+                    >
+                      {MONTH_FORMATTER.format(new Date(availCursor.year, availCursor.month, 1))}
+                    </motion.p>
+                  </AnimatePresence>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setAvailCursor(({ year, month }) =>
+                        month === 11 ? { year: year + 1, month: 0 } : { year, month: month + 1 },
+                      )
+                    }
+                    className="w-7 h-7 rounded-full flex items-center justify-center text-charcoal/60 hover:bg-forest/05 hover:text-forest active:scale-95 transition-all duration-300"
+                    aria-label="Next month"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                      <path d="M6 4l4 4-4 4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </button>
+                </div>
+
+                {/* Weekdays */}
+                <div className="grid grid-cols-7 px-2 pt-3 pb-1 border-b border-charcoal/03">
+                  {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((dVal, i) => (
+                    <div key={i} className="text-center font-sans text-[9px] tracking-wider uppercase text-charcoal/30 font-semibold">
+                      {dVal}
+                    </div>
+                  ))}
+                </div>
+
+                {/* Grid */}
+                <AnimatePresence mode="wait">
+                  <motion.div
+                    key={`${availCursor.year}-${availCursor.month}`}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="grid grid-cols-7 px-2 py-3 gap-y-1"
+                  >
+                    {availCells.map((cell, i) => {
+                      if (!cell.iso || !cell.day) {
+                        return <div key={`empty-${i}`} />
+                      }
+
+                      if (cell.isPast) {
+                        return (
+                          <button
+                            key={cell.iso}
+                            type="button"
+                            disabled
+                            className="flex items-center justify-center h-8 w-8 mx-auto font-sans text-xs text-charcoal/20 cursor-not-allowed"
+                          >
+                            {cell.day}
+                          </button>
+                        )
+                      }
+
+                      return (
+                        <motion.button
+                          key={cell.iso}
+                          type="button"
+                          whileTap={{ scale: 0.93 }}
+                          onClick={() => toggleBlockDate(cell.iso!)}
+                          className={clsx(
+                            'flex items-center justify-center h-8 w-8 mx-auto rounded-full',
+                            'font-sans text-xs transition-all duration-200',
+                            cell.isBlocked
+                              ? 'bg-forest/10 border border-forest/20 text-forest font-medium'
+                              : cell.isToday
+                                ? 'border border-forest/30 text-forest hover:bg-forest/05'
+                                : 'text-charcoal hover:bg-forest/05 hover:text-forest',
+                          )}
+                          title={cell.isBlocked ? 'Click to Unblock' : 'Click to Block'}
+                        >
+                          {cell.day}
+                        </motion.button>
+                      )
+                    })}
+                  </motion.div>
+                </AnimatePresence>
+              </div>
+
+              <div className="border-t border-charcoal/06 pt-4">
+                <h4 className="font-serif text-sm text-charcoal mb-2">{d.blockedDatesList}</h4>
+                {blockedDates.length === 0 ? (
+                  <p className="font-sans text-xs text-charcoal/40 py-4">
+                    {d.noBlockedDates}
+                  </p>
+                ) : (
+                  <ul className="divide-y divide-charcoal/06 max-h-52 overflow-y-auto pr-1">
+                    {blockedDates.map((date) => (
+                      <li key={date} className="py-2 flex items-center justify-between text-xs">
+                        <span className="font-sans text-charcoal/85 font-medium">{date}</span>
+                        <button
+                          type="button"
+                          onClick={() => unblockDate(date)}
+                          className="font-sans text-[10px] tracking-wider uppercase text-red-500 hover:text-red-700 font-semibold"
+                        >
+                          {d.unblock}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+
+            {/* City Locations Management */}
+            <div className="bg-white border border-charcoal/10 rounded-2xl p-6 shadow-sm lg:col-span-2">
+              <SectionHeading
+                title={d.locationsManagement}
+                desc={d.locationsManagementDesc}
+              />
+
+              {/* City Toggle */}
+              <div className="flex gap-2 mb-6 bg-linen/50 p-1 rounded-xl w-fit">
+                {(['baghdad', 'erbil'] as CityId[]).map((city) => (
+                  <button
+                    key={city}
+                    type="button"
+                    onClick={() => setSelectedCity(city)}
+                    className={clsx(
+                      'font-sans text-xs tracking-[0.1em] uppercase px-4 py-2 rounded-lg transition-all',
+                      selectedCity === city ? 'bg-forest text-cream' : 'text-charcoal/50',
+                    )}
+                  >
+                    {city === 'baghdad' ? d.baghdad : d.erbil}
+                  </button>
+                ))}
+              </div>
+
+              {/* Add New Location Form */}
+              <form onSubmit={addLocation} className="border border-charcoal/08 rounded-xl p-4 bg-linen/20 mb-6 space-y-3">
+                <p className="font-sans text-[10px] tracking-wider uppercase text-charcoal/50 font-bold mb-1">
+                  {d.addLocationTo} {selectedCity === 'baghdad' ? d.baghdad : d.erbil}
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <input
+                    type="text"
+                    required
+                    placeholder={d.nameEn}
+                    value={newLocName}
+                    onChange={(e) => setNewLocName(e.target.value)}
+                    className="font-sans text-xs border border-charcoal/15 rounded-lg px-3 py-2 outline-none focus:border-forest"
+                  />
+                  <input
+                    type="text"
+                    required
+                    placeholder={d.nameAr}
+                    value={newLocNameAr}
+                    onChange={(e) => setNewLocNameAr(e.target.value)}
+                    className="font-sans text-xs border border-charcoal/15 rounded-lg px-3 py-2 outline-none focus:border-forest text-right"
+                  />
+                  <input
+                    type="text"
+                    placeholder={d.descEn}
+                    value={newLocDesc}
+                    onChange={(e) => setNewLocDesc(e.target.value)}
+                    className="font-sans text-xs border border-charcoal/15 rounded-lg px-3 py-2 outline-none focus:border-forest sm:col-span-2"
+                  />
+                  <input
+                    type="text"
+                    placeholder={d.descAr}
+                    value={newLocDescAr}
+                    onChange={(e) => setNewLocDescAr(e.target.value)}
+                    className="font-sans text-xs border border-charcoal/15 rounded-lg px-3 py-2 outline-none focus:border-forest sm:col-span-2 text-right"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  className="font-sans text-[10px] tracking-wider uppercase bg-forest text-cream px-4 py-2 rounded-lg"
+                >
+                  {d.addLocationOption}
+                </button>
+              </form>
+
+              {/* Locations List */}
+              <div className="space-y-3">
+                {(locationsMap[selectedCity] || []).map((loc) => (
+                  <div key={loc.id} className="border border-charcoal/08 rounded-xl p-4 flex items-start justify-between gap-4">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-3">
+                        <p className="font-serif text-base text-charcoal">{loc.name}</p>
+                        <span className="text-charcoal/20">|</span>
+                        <p className="font-sans text-sm text-charcoal/70">{loc.nameAr}</p>
+                      </div>
+                      <p className="font-sans text-xs text-charcoal/45">{loc.description || (locale === 'ar' ? 'لا يوجد وصف' : 'No description')}</p>
+                      <p className="font-sans text-xs text-charcoal/30 text-right">{loc.descriptionAr}</p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => deleteLocation(loc.id)}
+                      className="font-sans text-[10px] uppercase text-red-400 hover:text-red-600 shrink-0"
+                    >
+                      {d.remove}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ─── TAB: PORTFOLIO MANAGEMENT ─── */}
+        {activeTab === 'portfolio' && (
+          <div className="space-y-10">
+            {/* Create Category */}
+            <div className="bg-white border border-charcoal/10 rounded-2xl p-6 shadow-sm max-w-xl">
+              <SectionHeading title={d.portfolioCategories} desc={d.portfolioCategoriesDesc} />
+              <form onSubmit={createCategory} className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <input
+                  type="text"
+                  required
+                  placeholder={d.catCode}
+                  value={newCatId}
+                  onChange={(e) => setNewCatId(e.target.value)}
+                  className="font-sans text-xs border border-charcoal/15 rounded-xl px-3 py-2 outline-none focus:border-forest"
+                />
+                <input
+                  type="text"
+                  required
+                  placeholder={d.catNameEn}
+                  value={newCatName}
+                  onChange={(e) => setNewCatName(e.target.value)}
+                  className="font-sans text-xs border border-charcoal/15 rounded-xl px-3 py-2 outline-none focus:border-forest"
+                />
+                <input
+                  type="text"
+                  placeholder={d.catNameAr}
+                  value={newCatNameAr}
+                  onChange={(e) => setNewCatNameAr(e.target.value)}
+                  className="font-sans text-xs border border-charcoal/15 rounded-xl px-3 py-2 outline-none focus:border-forest text-right"
+                />
+                <button
+                  type="submit"
+                  className="font-sans text-xs tracking-wider uppercase bg-forest text-cream py-2 rounded-xl sm:col-span-3 mt-1"
+                >
+                  {d.createCat}
+                </button>
+              </form>
+            </div>
+
+            {/* Categories List & Image Upload */}
+            <div className="space-y-6">
+              {categories.map((cat) => {
+                const catImages = portfolioImgs.filter((img) => img.category === cat.id)
+                const isStatic = DEFAULT_CATEGORIES.some((c) => c.id === cat.id)
+
+                return (
+                  <div key={cat.id} className="bg-white border border-charcoal/10 rounded-2xl p-6 shadow-sm space-y-4">
+                    <div className="flex items-start justify-between flex-wrap gap-4 border-b border-charcoal/06 pb-4">
+                      {renamingCatId === cat.id ? (
+                        <div className="flex gap-2 flex-wrap items-center">
+                          <input
+                            type="text"
+                            value={renameNameEn}
+                            onChange={(e) => setRenameNameEn(e.target.value)}
+                            className="font-sans text-xs border border-charcoal/15 rounded px-2 py-1 outline-none"
+                            placeholder="English"
+                          />
+                          <input
+                            type="text"
+                            value={renameNameAr}
+                            onChange={(e) => setRenameNameAr(e.target.value)}
+                            className="font-sans text-xs border border-charcoal/15 rounded px-2 py-1 outline-none text-right"
+                            placeholder="العربية"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => renameCategory(cat.id)}
+                            className="font-sans text-[10px] uppercase text-forest hover:underline"
+                          >
+                            {d.save}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setRenamingCatId(null)}
+                            className="font-sans text-[10px] uppercase text-charcoal/40 hover:underline"
+                          >
+                            {d.cancel}
+                          </button>
+                        </div>
+                      ) : (
+                        <div>
+                          <div className="flex items-center gap-3">
+                            <h3 className="font-serif text-lg text-charcoal">{cat.name}</h3>
+                            <span className="text-charcoal/20">|</span>
+                            <span className="font-sans text-sm text-charcoal/60">{cat.nameAr}</span>
+                            <span className="font-sans text-[10px] text-charcoal/30 font-bold uppercase tracking-wider">
+                              ({cat.id})
+                            </span>
+                          </div>
+                          <p className="font-sans text-xs text-charcoal/40 mt-0.5">
+                            {catImages.length} {locale === 'ar' ? 'صور في هذا التصنيف' : 'images total in category'}
+                          </p>
+                        </div>
+                      )}
+
+                      <div className="flex gap-3">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setRenamingCatId(cat.id)
+                            setRenameNameEn(cat.name)
+                            setRenameNameAr(cat.nameAr)
+                          }}
+                          className="font-sans text-[10px] uppercase text-forest hover:underline"
+                        >
+                          {d.rename}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={catImages.length > 0}
+                          onClick={() => deleteCategory(cat.id)}
+                          className={clsx(
+                            'font-sans text-[10px] uppercase',
+                            catImages.length > 0
+                              ? 'text-charcoal/20 cursor-not-allowed'
+                              : 'text-red-500 hover:underline',
+                          )}
+                          title={catImages.length > 0 ? (locale === 'ar' ? 'لا يمكن حذف تصنيف يحتوي على صور' : 'Cannot delete category while it contains images') : ''}
+                        >
+                          {d.deleteCat}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Multiple Image Upload Box */}
+                    <div className="flex items-center gap-4 bg-linen/25 p-4 rounded-xl border border-dashed border-charcoal/15">
+                      <label className="flex flex-col cursor-pointer">
+                        <span className="font-sans text-xs tracking-wider uppercase bg-forest text-cream px-4 py-2.5 rounded-lg hover:bg-forest-deep transition">
+                          {d.uploadImages}
+                        </span>
+                        <input
+                          type="file"
+                          multiple
+                          accept="image/*"
+                          className="hidden"
+                          disabled={uploading}
+                          onChange={(e) => handleImageUpload(cat.id, e.target.files)}
+                        />
+                      </label>
+                      <p className="font-sans text-[10px] text-charcoal/40">
+                        {d.uploadDesc}
+                      </p>
+                    </div>
+
+                    {/* Image Previews */}
+                    {catImages.length === 0 ? (
+                      <p className="font-sans text-xs text-charcoal/30 py-4 text-center">
+                        {d.emptyCat}
+                      </p>
+                    ) : (
+                      <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3">
+                        {catImages.map((img) => {
+                          const src = img.id.startsWith('data:') || img.id.startsWith('blob:')
+                            ? img.id
+                            : `/images/portfolio/${img.id}-sm.webp`
+
+                          return (
+                            <div key={img.id} className="relative aspect-square group rounded-lg overflow-hidden border border-charcoal/06">
+                              <img
+                                src={src}
+                                alt={img.title}
+                                className="w-full h-full object-cover"
+                              />
+                              <div className="absolute inset-0 bg-charcoal/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-all">
+                                <button
+                                  type="button"
+                                  onClick={() => deletePortfolioImage(img.id)}
+                                  className="font-sans text-[9px] tracking-widest uppercase bg-red-600 text-cream px-2 py-1 rounded"
+                                >
+                                  {locale === 'ar' ? 'حذف' : 'Delete'}
+                                </button>
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+      </main>
+    </div>
+  )
+}
+
+function DashboardPage() {
+  const [authed, setAuthed] = useState(false)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    if (!supabase) {
+      setLoading(false)
+      return
+    }
+
+    // Check active session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        setAuthed(true)
+      }
+      setLoading(false)
+    })
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) {
+        setAuthed(true)
+      } else {
+        setAuthed(false)
+      }
+    })
+
+    return () => {
+      subscription.unsubscribe()
+    }
+  }, [])
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-charcoal flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-sage"></div>
+      </div>
+    )
+  }
+
+  if (!authed) {
+    return <LoginScreen onLogin={() => setAuthed(true)} />
+  }
+
+  return (
+    <Dashboard
+      onLogout={async () => {
+        if (supabase) {
+          await supabase.auth.signOut()
+        }
+        setAuthed(false)
+      }}
+    />
+  )
+}
