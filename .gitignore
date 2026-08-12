@@ -7,3 +7,6 @@ dist
 *.local
 .DS_Store
 raw-images
+assets/source/
+*.MOV
+*.mov
