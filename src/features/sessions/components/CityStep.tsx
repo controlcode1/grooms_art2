@@ -43,7 +43,7 @@ export function CityStep({ selected, onSelect }: CityStepProps) {
      * so the background bleeds edge-to-edge.
      */
     <div
-      className="relative -mx-6 md:-mx-12 lg:-mx-20 -mt-20 md:-mt-28 flex items-center justify-center"
+      className="relative -mx-6 md:-mx-12 lg:-mx-20 -mt-20 md:-mt-28 -mb-20 md:-mb-28 flex items-center justify-center"
       style={{ minHeight: '100svh' }}
     >
       {/* Full-bleed background image — covers entire element */}
