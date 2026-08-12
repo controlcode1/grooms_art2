@@ -50,60 +50,39 @@ export function CityStep({ selected, onSelect, wizardType }: CityStepProps) {
         </h1>
       </motion.div>
 
-      <AnimatePresence mode="wait">
-        {!isFullDay || showCities ? (
-          <motion.div
-            key="cities-grid"
-            initial={{ opacity: 0, y: 15 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -15 }}
-            transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-            className="grid grid-cols-1 sm:grid-cols-2 gap-6 w-full max-w-lg"
-          >
-            {CITIES.map((city, i) => {
-              const isSelected = selected === city.id
-              return (
-                <motion.button
-                  key={city.id}
-                  type="button"
-                  onClick={() => onSelect(city.id)}
-                  initial={{ opacity: 0, y: 14 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.6, delay: i * 0.1, ease: [0.16, 1, 0.3, 1] }}
-                  className={clsx(
-                    'group rounded-2xl border p-10 flex flex-col items-center gap-5 transition-all duration-500',
-                    isSelected
-                      ? 'border-forest bg-forest/[0.04] shadow-[0_0_0_1px_rgba(18,55,42,0.3)]'
-                      : 'border-charcoal/15 hover:border-forest/40 hover:shadow-[0_4px_24px_rgba(18,55,42,0.08)]',
-                  )}
-                  aria-pressed={isSelected}
-                >
-                  {city.icon}
-                  <span className="font-serif text-2xl text-charcoal">
-                    {t.sessions.cities[city.id as 'baghdad' | 'erbil']}
-                  </span>
-                </motion.button>
-              )
-            })}
-          </motion.div>
-        ) : (
-          <motion.div
-            key="select-city-btn"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            transition={{ duration: 0.4 }}
-          >
-            <button
+      <motion.div
+        key="cities-grid"
+        initial={{ opacity: 0, y: 15 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+        className="grid grid-cols-1 sm:grid-cols-2 gap-6 w-full max-w-lg"
+      >
+        {CITIES.map((city, i) => {
+          const isSelected = selected === city.id
+          return (
+            <motion.button
+              key={city.id}
               type="button"
-              onClick={() => setShowCities(true)}
-              className="font-sans text-xs tracking-[0.2em] uppercase bg-forest text-cream px-8 py-4 rounded-lg hover:bg-forest-deep transition-colors duration-500 shadow-sm"
+              onClick={() => onSelect(city.id)}
+              initial={{ opacity: 0, y: 14 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: i * 0.1, ease: [0.16, 1, 0.3, 1] }}
+              className={clsx(
+                'group rounded-2xl border p-10 flex flex-col items-center gap-5 transition-all duration-500',
+                isSelected
+                  ? 'border-forest bg-forest/[0.04] shadow-[0_0_0_1px_rgba(18,55,42,0.3)]'
+                  : 'border-charcoal/15 hover:border-forest/40 hover:shadow-[0_4px_24px_rgba(18,55,42,0.08)]',
+              )}
+              aria-pressed={isSelected}
             >
-              {locale === 'ar' ? 'اختر المدينة' : 'Select your City'}
-            </button>
-          </motion.div>
-        )}
-      </AnimatePresence>
+              {city.icon}
+              <span className="font-serif text-2xl text-charcoal">
+                {t.sessions.cities[city.id as 'baghdad' | 'erbil']}
+              </span>
+            </motion.button>
+          )
+        })}
+      </motion.div>
     </div>
   )
 }
