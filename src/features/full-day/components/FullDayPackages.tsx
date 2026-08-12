@@ -99,7 +99,7 @@ export function FullDayPackages() {
   const { t } = useI18n()
 
   return (
-    <Section className="py-20 md:py-28 border-t border-charcoal/10">
+    <Section className="py-20 md:py-28 border-t border-cream/10">
       <SharedBookingWizard
         type="full-day"
         packageNames={PACKAGE_NAMES}

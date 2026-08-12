@@ -39,9 +39,9 @@ export function CityStep({ selected, onSelect, wizardType }: CityStepProps) {
   const [isOpen, setIsOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
-  // Use frame-19 for full-day (from FullDayHero) and frame-01 for session
+  // Use user's cinematic photo for full-day and frame-01 for session
   const bgImage = isFullDay
-    ? '/images/portfolio/frame-19-lg.webp'
+    ? '/images/fullday-hero.jpg'
     : '/images/portfolio/frame-01-lg.webp'
 
   // Close dropdown on click outside
