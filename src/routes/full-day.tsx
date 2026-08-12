@@ -1,5 +1,4 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { FullDayHero } from '@/features/full-day/components/FullDayHero'
 import { FullDayPackages } from '@/features/full-day/components/FullDayPackages'
 
 export const Route = createFileRoute('/full-day')({
@@ -19,7 +18,6 @@ export const Route = createFileRoute('/full-day')({
 function FullDayPage() {
   return (
     <>
-      <FullDayHero />
       <FullDayPackages />
     </>
   )
