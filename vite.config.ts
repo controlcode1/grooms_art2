@@ -12,11 +12,10 @@ export default defineConfig({
     tsconfigPaths: true,
   },
   plugins: [
-    netlify(),
     tailwindcss(),
     tanstackStart(),
+    netlify(),
     viteReact(),
   ],
 })
-
 
