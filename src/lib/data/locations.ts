@@ -11,8 +11,6 @@
 
 export interface Location {
   id: string
-  /** City this location belongs to — populated when fetched from Supabase */
-  city?: CityId
   name: string
   nameAr: string
   description: string

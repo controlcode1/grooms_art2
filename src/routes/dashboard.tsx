@@ -541,16 +541,15 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
 
   useEffect(() => {
     if (!supabase) return
-    const client = supabase
     reloadBookings()
     reloadNotifications()
 
-    const bookingsChannel = client
+    const bookingsChannel = supabase
       .channel('db_bookings_rt')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings' }, () => reloadBookings())
       .subscribe()
 
-    const notifChannel = client
+    const notifChannel = supabase
       .channel('db_notifications_rt')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' }, (payload) => {
         reloadNotifications()
@@ -559,8 +558,8 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
       .subscribe()
 
     return () => {
-      client.removeChannel(bookingsChannel)
-      client.removeChannel(notifChannel)
+      supabase.removeChannel(bookingsChannel)
+      supabase.removeChannel(notifChannel)
     }
   }, [reloadBookings, reloadNotifications, showToast, locale])
 
@@ -699,22 +698,21 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
 
   useEffect(() => {
     if (!supabase) return
-    const client = supabase
     reloadAvailability()
 
-    const blockedChannel = client
+    const blockedChannel = supabase
       .channel('db_blocked_dates_rt')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'blocked_dates' }, () => reloadAvailability())
       .subscribe()
 
-    const locsChannel = client
+    const locsChannel = supabase
       .channel('db_locations_rt')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'locations' }, () => reloadAvailability())
       .subscribe()
 
     return () => {
-      client.removeChannel(blockedChannel)
-      client.removeChannel(locsChannel)
+      supabase.removeChannel(blockedChannel)
+      supabase.removeChannel(locsChannel)
     }
   }, [reloadAvailability])
 
@@ -879,22 +877,21 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
 
   useEffect(() => {
     if (!supabase) return
-    const client = supabase
     reloadPortfolio()
 
-    const catsChannel = client
+    const catsChannel = supabase
       .channel('db_portfolio_cats_rt')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'portfolio_categories' }, () => reloadPortfolio())
       .subscribe()
 
-    const imgsChannel = client
+    const imgsChannel = supabase
       .channel('db_portfolio_imgs_rt')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'portfolio_images' }, () => reloadPortfolio())
       .subscribe()
 
     return () => {
-      client.removeChannel(catsChannel)
-      client.removeChannel(imgsChannel)
+      supabase.removeChannel(catsChannel)
+      supabase.removeChannel(imgsChannel)
     }
   }, [reloadPortfolio])
 

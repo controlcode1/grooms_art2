@@ -95,17 +95,16 @@ export function SharedBookingWizard({
 
   useEffect(() => {
     if (!supabase) return
-    const client = supabase
 
     const loadBlockedDates = async () => {
-      const { data, error } = await client.from('blocked_dates').select('date')
+      const { data, error } = await supabase.from('blocked_dates').select('date')
       if (!error && data) {
         setDbBlockedDates(data.map((d: any) => d.date))
       }
     }
 
     const loadLocations = async () => {
-      const { data, error } = await client.from('locations').select('*')
+      const { data, error } = await supabase.from('locations').select('*')
       if (!error && data) {
         setDbLocations(
           data.map((l: any) => ({
@@ -123,14 +122,14 @@ export function SharedBookingWizard({
     loadBlockedDates()
     loadLocations()
 
-    const blockedChannel = client
+    const blockedChannel = supabase
       .channel('public_blocked_dates_realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'blocked_dates' }, () => {
         loadBlockedDates()
       })
       .subscribe()
 
-    const locationsChannel = client
+    const locationsChannel = supabase
       .channel('public_locations_realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'locations' }, () => {
         loadLocations()
@@ -138,8 +137,8 @@ export function SharedBookingWizard({
       .subscribe()
 
     return () => {
-      client.removeChannel(blockedChannel)
-      client.removeChannel(locationsChannel)
+      supabase.removeChannel(blockedChannel)
+      supabase.removeChannel(locationsChannel)
     }
   }, [])
 
@@ -368,8 +367,8 @@ export function SharedBookingWizard({
         </motion.div>
       </AnimatePresence>
 
-      {/* Navigation buttons — hidden on confirm step */}
-      {step !== 'confirm' && (
+      {/* Navigation buttons — hidden on city and confirm steps */}
+      {step !== 'city' && step !== 'confirm' && (
         <div className="flex items-center justify-between gap-4 mt-12 pt-8 border-t border-charcoal/10 w-full">
           <button
             type="button"

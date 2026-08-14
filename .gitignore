@@ -10,3 +10,6 @@ raw-images
 assets/source/
 *.MOV
 *.mov
+
+# Local Netlify folder
+.netlify
