@@ -8,11 +8,3 @@
 [functions]
   node_bundler = "esbuild"
   included_files = ["dist/server/**"]
-
-# Route all requests through the SSR function
-# Static assets in dist/client are served directly by Netlify CDN (no redirect needed)
-# Only pages/routes that don't match a static file go to the SSR function
-[[redirects]]
-  from = "/*"
-  to = "/.netlify/functions/ssr"
-  status = 200
