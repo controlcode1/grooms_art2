@@ -107,11 +107,12 @@ export function SharedBookingWizard({
           : selectedLocationObj.name
         : '—'
 
-  const blockedDatesArray = storage.get<string[]>(STORAGE_KEYS.blockedDates) || []
-  const fullyBookedArray = storage.get<string[]>('ga_fully_booked_dates') || []
   const blockedDatesSet = useMemo(() => {
-    return new Set([...blockedDatesArray, ...fullyBookedArray])
-  }, [blockedDatesArray, fullyBookedArray])
+    const blocked = storage.get<string[]>(STORAGE_KEYS.blockedDates) || []
+    const fullyBooked = storage.get<string[]>('ga_fully_booked_dates') || []
+    return new Set([...blocked, ...fullyBooked])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const canContinue =
     (step === 'city' && !!state.city) ||
