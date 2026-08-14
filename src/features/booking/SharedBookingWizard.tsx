@@ -130,7 +130,6 @@ export function SharedBookingWizard({
 
     const bookingId = `${type}-${Date.now()}`
     const dbRow = {
-      id: bookingId,
       type,
       status: 'pending',
       city: state.city ?? '',
