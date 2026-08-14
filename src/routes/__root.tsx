@@ -101,6 +101,7 @@ function NotFoundPage() {
 function RootComponent() {
   const location = useLocation()
   const isDashboard = location.pathname.startsWith('/dashboard')
+  const hideFooter = isDashboard || location.pathname === '/full-day' || location.pathname === '/sessions'
 
   return (
     <RootDocument>
@@ -109,7 +110,7 @@ function RootComponent() {
         <main className="min-h-screen bg-sand">
           <Outlet />
         </main>
-        {!isDashboard && <Footer />}
+        {!hideFooter && <Footer />}
       </I18nProvider>
     </RootDocument>
   )

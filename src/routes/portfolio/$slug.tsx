@@ -57,15 +57,8 @@ function PortfolioDetail() {
         />
       </div>
 
-      <div className="mt-8 flex flex-col md:flex-row md:items-end md:justify-between gap-6 max-w-4xl">
+      <div className="mt-8 max-w-4xl">
         <h1 className="font-serif text-3xl md:text-5xl text-charcoal">{image.title}</h1>
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-x-6 gap-y-2 font-sans text-[11px] tracking-[0.1em] uppercase text-charcoal/50">
-          <span>{image.exif.camera}</span>
-          <span>{image.exif.focalLength}</span>
-          <span>{image.exif.aperture}</span>
-          <span>{image.exif.shutter}</span>
-          <span>{image.exif.iso}</span>
-        </div>
       </div>
 
       {related.length > 0 && (

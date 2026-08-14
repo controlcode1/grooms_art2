@@ -1,7 +1,8 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { clsx } from 'clsx'
 import { useI18n } from '@/lib/i18n'
+import { Section } from '@/features/shared/components/Section'
 import { CityStep } from '@/features/sessions/components/CityStep'
 import { LocationStep } from '@/features/sessions/components/LocationStep'
 import { SessionDateStep } from '@/features/sessions/components/SessionDateStep'
@@ -9,6 +10,7 @@ import { CustomerInfoStep, type CustomerInfoData } from '@/features/sessions/com
 import { getLocationsForCity, type Location } from '@/lib/data/locations'
 import { storage, STORAGE_KEYS } from '@/lib/storage'
 import type { Booking, BookingType } from '@/lib/types/booking'
+import { supabase } from '@/lib/supabase/client'
 
 type Step = 'city' | 'package' | 'location' | 'date' | 'customerInfo' | 'confirm'
 const STEPS: Step[] = ['city', 'package', 'location', 'date', 'customerInfo', 'confirm']
@@ -69,6 +71,11 @@ export function SharedBookingWizard({
   const [submitting, setSubmitting] = useState(false)
   const [success, setSuccess] = useState(false)
 
+  // Reset scroll position to top on step changes
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }, [stepIndex])
+
   const [state, setState] = useState({
     city: null as string | null,
     packageId: null as string | null,
@@ -100,7 +107,10 @@ export function SharedBookingWizard({
         : '—'
 
   const blockedDatesArray = storage.get<string[]>(STORAGE_KEYS.blockedDates) || []
-  const blockedDatesSet = useMemo(() => new Set(blockedDatesArray), [blockedDatesArray])
+  const fullyBookedArray = storage.get<string[]>('ga_fully_booked_dates') || []
+  const blockedDatesSet = useMemo(() => {
+    return new Set([...blockedDatesArray, ...fullyBookedArray])
+  }, [blockedDatesArray, fullyBookedArray])
 
   const canContinue =
     (step === 'city' && !!state.city) ||
@@ -117,120 +127,124 @@ export function SharedBookingWizard({
 
   const handleConfirm = async () => {
     setSubmitting(true)
-    // Simulate API request delay
-    await new Promise((resolve) => setTimeout(resolve, 800))
 
-    const newBooking: Booking = {
-      id: `${type}-${Date.now()}`,
+    const bookingId = `${type}-${Date.now()}`
+    const dbRow = {
+      id: bookingId,
       type,
       status: 'pending',
       city: state.city ?? '',
-      packageId: state.packageId ?? '',
-      location: state.locationId ?? '',
+      package_id: state.packageId ?? '',
+      location_id: state.locationId ?? '',
       date: state.date ?? '',
-      customerInfo: state.customerInfo,
-      createdAt: new Date().toISOString(),
+      full_name: state.customerInfo.fullName,
+      phone: state.customerInfo.phone,
+      email: state.customerInfo.email || '',
+      notes: state.customerInfo.notes || '',
+      whatsapp_triggered: false,
     }
 
-    try {
-      const existing = storage.get<Booking[]>(STORAGE_KEYS.bookings) || []
-      existing.unshift(newBooking)
-      storage.set(STORAGE_KEYS.bookings, existing)
-    } catch {
-      // silently handle storage limits
+    let savedToSupabase = false
+    if (supabase) {
+      try {
+        const { error } = await supabase.from('bookings').insert(dbRow)
+        if (error) throw error
+        savedToSupabase = true
+      } catch (err) {
+        console.error('Failed to save booking to Supabase, fallback to storage:', err)
+      }
+    }
+
+    if (!savedToSupabase) {
+      const newBooking: Booking = {
+        id: bookingId,
+        type,
+        status: 'pending',
+        city: state.city ?? '',
+        packageId: state.packageId ?? '',
+        location: state.locationId ?? '',
+        date: state.date ?? '',
+        customerInfo: state.customerInfo,
+        createdAt: new Date().toISOString(),
+      }
+      try {
+        const existing = storage.get<Booking[]>(STORAGE_KEYS.bookings) || []
+        existing.unshift(newBooking)
+        storage.set(STORAGE_KEYS.bookings, existing)
+      } catch {
+        // silently handle storage limits
+      }
     }
 
     setSubmitting(false)
     setSuccess(true)
   }
 
-  if (success) {
+  if (step === 'city') {
     return (
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
-        className="max-w-md space-y-6"
-      >
-        <div className="flex flex-col items-start text-start">
-          <motion.div
-            initial={{ scale: 0.85, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-            className="w-12 h-12 rounded-full bg-forest text-cream flex items-center justify-center mb-4"
-          >
-            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-              <path d="M4 10.5L8 14.5L16 6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </motion.div>
-          <h2 className="font-serif text-2xl md:text-3xl text-charcoal mb-2">
-            {successTitle || t.sessions.successTitle}
-          </h2>
-          <p className="font-sans text-sm text-charcoal/60 leading-relaxed">
-            {successBody || t.sessions.successBody}
-          </p>
-        </div>
-
-        {/* Welcoming Card in Grooms Art Theme */}
-        <div className="bg-linen/40 border border-charcoal/10 rounded-2xl p-6 space-y-4 shadow-sm text-start">
-          <p className="font-serif italic text-[15px] text-charcoal leading-relaxed">
-            {locale === 'ar' 
-              ? '« أهلاً بكِ في استوديو Grooms Art. نحن هنا لا لنلتقط مجرد صور، بل لنروي قصتكم بصدق ودفء، مسترشدين بالضوء الطبيعي واللحظات العفوية. »' 
-              : '“Welcome to Grooms Art Studio. We are not here to merely take photos; we are here to honestly tell your story, guided by natural light and the quiet seconds in between.”'}
-          </p>
-          <div className="divider-hairline" />
-          <div className="space-y-2 font-sans text-xs text-charcoal/70">
-            <div className="flex justify-between items-center">
-              <span className="font-medium text-charcoal/50 uppercase tracking-wider">{locale === 'ar' ? 'الاسم:' : 'Name:'}</span>
-              <span className="text-charcoal font-medium">{state.customerInfo.fullName}</span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="font-medium text-charcoal/50 uppercase tracking-wider">{locale === 'ar' ? 'التاريخ:' : 'Date:'}</span>
-              <span className="text-charcoal font-medium">{state.date}</span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="font-medium text-charcoal/50 uppercase tracking-wider">{locale === 'ar' ? 'الباقة:' : 'Package:'}</span>
-              <span className="text-charcoal font-medium">{state.packageId ? packageNames[state.packageId] ?? state.packageId : '—'}</span>
-            </div>
-          </div>
-        </div>
-      </motion.div>
+      <CityStep
+        wizardType={type}
+        selected={state.city}
+        onSelect={(city) => {
+          setState((s) => ({ ...s, city }))
+          setTimeout(() => setStepIndex(1), 350)
+        }}
+      />
     )
   }
 
-  return (
-    <div>
-      {/* Step indicators — hidden on city step */}
-      {step !== 'city' && (
-        <ol className="flex flex-wrap gap-x-8 gap-y-3 mb-14">
-          {STEPS.filter((s) => s !== 'city').map((s, i) => {
-            const realIndex = i + 1 // offset city at index 0
-            return (
-              <li key={s} className="flex items-center gap-2">
-                <span
-                  className={clsx(
-                    'w-6 h-6 rounded-full flex items-center justify-center font-sans text-[11px] border transition-colors duration-500',
-                    realIndex < stepIndex && 'bg-forest border-forest text-cream',
-                    realIndex === stepIndex && 'border-forest text-forest',
-                    realIndex > stepIndex && 'border-charcoal/25 text-charcoal/35',
-                  )}
-                >
-                  {i + 1}
-                </span>
-                <span
-                  className={clsx(
-                    'font-sans text-xs tracking-[0.15em] uppercase',
-                    realIndex === stepIndex ? 'text-charcoal' : 'text-charcoal/40',
-                  )}
-                >
-                  {stepLabels[s]}
-                </span>
-              </li>
-            )
-          })}
-        </ol>
-      )}
+  const content = success ? (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
+      className="max-w-md space-y-6"
+    >
+      <div className="flex flex-col items-start text-start">
+        <motion.div
+          initial={{ scale: 0.85, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+          className="w-12 h-12 rounded-full bg-forest text-cream flex items-center justify-center mb-4"
+        >
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+            <path d="M4 10.5L8 14.5L16 6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </motion.div>
+        <h2 className="font-serif text-2xl md:text-3xl text-charcoal mb-2">
+          {successTitle || t.sessions.successTitle}
+        </h2>
+        <p className="font-sans text-sm text-charcoal/60 leading-relaxed">
+          {successBody || t.sessions.successBody}
+        </p>
+      </div>
 
+      {/* Welcoming Card in Grooms Art Theme */}
+      <div className="bg-linen/40 border border-charcoal/10 rounded-2xl p-6 space-y-4 shadow-sm text-start">
+        <p className="font-serif italic text-[15px] text-charcoal leading-relaxed">
+          {locale === 'ar' 
+            ? '« أهلاً بكِ في استوديو Grooms Art. نحن هنا لا لنلتقط مجرد صور، بل لنروي قصتكم بصدق ودفء، مسترشدين بالضوء الطبيعي واللحظات العفوية. »' 
+            : '“Welcome to Grooms Art Studio. We are not here to merely take photos; we are here to honestly tell your story, guided by natural light and the quiet seconds in between.”'}
+        </p>
+        <div className="divider-hairline" />
+        <div className="space-y-2 font-sans text-xs text-charcoal/70">
+          <div className="flex justify-between items-center">
+            <span className="font-medium text-charcoal/50 uppercase tracking-wider">{locale === 'ar' ? 'الاسم:' : 'Name:'}</span>
+            <span className="text-charcoal font-medium">{state.customerInfo.fullName}</span>
+          </div>
+          <div className="flex justify-between items-center">
+            <span className="font-medium text-charcoal/50 uppercase tracking-wider">{locale === 'ar' ? 'التاريخ:' : 'Date:'}</span>
+            <span className="text-charcoal font-medium">{state.date}</span>
+          </div>
+          <div className="flex justify-between items-center">
+            <span className="font-medium text-charcoal/50 uppercase tracking-wider">{locale === 'ar' ? 'الباقة:' : 'Package:'}</span>
+            <span className="text-charcoal font-medium">{state.packageId ? packageNames[state.packageId] ?? state.packageId : '—'}</span>
+          </div>
+        </div>
+      </div>
+    </motion.div>
+  ) : (
+    <>
       <AnimatePresence mode="wait">
         <motion.div
           key={step}
@@ -239,17 +253,6 @@ export function SharedBookingWizard({
           exit={{ opacity: 0, y: -12 }}
           transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
         >
-          {step === 'city' && (
-            <CityStep
-              wizardType={type}
-              selected={state.city}
-              onSelect={(city) => {
-                setState((s) => ({ ...s, city }))
-                setTimeout(() => setStepIndex(1), 350)
-              }}
-            />
-          )}
-
           {step === 'package' &&
             renderPackageStep(state.city, state.packageId, (packageId) =>
               setState((s) => ({ ...s, packageId }))
@@ -324,11 +327,11 @@ export function SharedBookingWizard({
 
       {/* Navigation buttons — hidden on city and confirm steps */}
       {step !== 'city' && step !== 'confirm' && (
-        <div className="flex items-center gap-4 mt-12 pt-8 border-t border-charcoal/10">
+        <div className="flex items-center justify-between gap-4 mt-12 pt-8 border-t border-charcoal/10 w-full">
           <button
             type="button"
             onClick={goBack}
-            className="font-sans text-xs tracking-[0.2em] uppercase text-charcoal/60 hover:text-forest transition-colors duration-500"
+            className="font-sans text-xs tracking-[0.15em] uppercase border border-charcoal/30 text-charcoal/70 px-6 py-3 rounded-lg hover:bg-charcoal/5 transition-all text-center min-w-[100px]"
           >
             {t.sessions.back}
           </button>
@@ -336,12 +339,22 @@ export function SharedBookingWizard({
             type="button"
             onClick={goNext}
             disabled={!canContinue}
-            className="font-sans text-xs tracking-[0.2em] uppercase bg-forest text-cream px-8 py-4 rounded-lg hover:bg-forest-deep transition-colors duration-500 disabled:opacity-40 disabled:cursor-not-allowed ms-auto"
+            className="font-sans text-xs tracking-[0.15em] uppercase bg-forest text-cream px-6 py-3 rounded-lg hover:bg-forest-deep transition-all disabled:opacity-40 disabled:cursor-not-allowed text-center min-w-[100px]"
           >
             {t.sessions.continue}
           </button>
         </div>
       )}
-    </div>
+    </>
+  )
+
+  return (
+    <Section
+      className={clsx(
+        type === 'full-day' ? 'py-20 md:py-28' : 'pt-32 pb-24 md:pt-40 md:pb-32'
+      )}
+    >
+      {content}
+    </Section>
   )
 }

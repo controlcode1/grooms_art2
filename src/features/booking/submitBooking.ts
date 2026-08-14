@@ -5,8 +5,8 @@ export async function submitBooking(state: BookingState): Promise<void> {
   if (isSupabaseConfigured && supabase) {
     const { error } = await supabase.from('bookings').insert({
       package_id: state.packageId,
-      event_date: state.date,
-      addon_ids: state.addonIds,
+      date: state.date,
+      type: 'session',
       status: 'pending',
     })
     if (error) throw error

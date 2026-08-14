@@ -1,7 +1,7 @@
-import { motion } from 'motion/react'
+import { useState } from 'react'
+import { motion, AnimatePresence } from 'motion/react'
 import { clsx } from 'clsx'
 import { useI18n } from '@/lib/i18n'
-import { Section } from '@/features/shared/components/Section'
 import { SharedBookingWizard } from '@/features/booking/SharedBookingWizard'
 
 const VIP_FEATURES = {
@@ -96,10 +96,13 @@ const PACKAGE_NAMES = {
 }
 
 export function FullDayPackages() {
-  const { t } = useI18n()
+  const { t, locale } = useI18n()
+  const [activeModalPkgId, setActiveModalPkgId] = useState<string | null>(null)
+
+  const activeFeatures = activeModalPkgId === 'royal' ? ROYAL_FEATURES : VIP_FEATURES
 
   return (
-    <Section className="py-20 md:py-28 border-t border-charcoal/10">
+    <>
       <SharedBookingWizard
         type="full-day"
         packageNames={PACKAGE_NAMES}
@@ -110,7 +113,9 @@ export function FullDayPackages() {
             <h2 className="font-serif text-2xl md:text-3xl text-charcoal mb-8">
               {t.fullDay.packagesTitle}
             </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 lg:gap-8">
+
+            {/* 1. DESKTOP GRID LAYOUT (hidden on mobile, grid on desktop) */}
+            <div className="hidden md:grid grid-cols-2 gap-6 lg:gap-8">
               {/* VIP Collection */}
               <motion.button
                 type="button"
@@ -120,7 +125,7 @@ export function FullDayPackages() {
                 viewport={{ once: true, margin: '-60px' }}
                 transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
                 className={clsx(
-                  'text-left rounded-2xl p-8 md:p-10 flex flex-col transition-colors duration-500',
+                  'text-left rounded-2xl p-8 md:p-10 flex flex-col transition-all duration-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest/50',
                   selected === 'vip'
                     ? 'border-2 border-forest bg-forest/[0.04]'
                     : 'border border-charcoal/15 hover:border-charcoal/40',
@@ -158,10 +163,10 @@ export function FullDayPackages() {
 
                 <div
                   className={clsx(
-                    'mt-auto text-center font-sans text-xs tracking-[0.15em] uppercase py-2.5 rounded-md border transition-colors duration-500',
+                    'mt-auto text-center font-sans text-xs tracking-[0.15em] uppercase py-2.5 rounded-md border transition-colors duration-500 w-full',
                     selected === 'vip'
                       ? 'bg-forest text-cream border-forest'
-                      : 'border-charcoal/30 text-charcoal/70',
+                      : 'border-charcoal/30 text-charcoal/70 hover:bg-charcoal/5',
                   )}
                 >
                   {selected === 'vip' ? t.fullDay.selected : t.fullDay.selectCta}
@@ -177,15 +182,13 @@ export function FullDayPackages() {
                 viewport={{ once: true, margin: '-60px' }}
                 transition={{ duration: 0.7, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
                 className={clsx(
-                  'text-left rounded-2xl p-8 md:p-10 flex flex-col relative overflow-hidden transition-colors duration-500',
+                  'text-left rounded-2xl p-8 md:p-10 flex flex-col transition-all duration-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest/50',
                   selected === 'royal'
                     ? 'border-2 border-forest bg-forest/[0.04]'
-                    : 'border-2 border-forest/30 hover:border-forest/50',
+                    : 'border border-charcoal/15 hover:border-charcoal/40',
                 )}
                 aria-pressed={selected === 'royal'}
               >
-                {/* Premium accent */}
-                <div className="absolute top-0 inset-x-0 h-1 rounded-t-2xl bg-gradient-to-r from-forest via-sage to-forest" />
 
                 <div className="mb-8">
                   <p className="font-sans text-[10px] tracking-[0.25em] uppercase text-sage mb-3">
@@ -222,19 +225,143 @@ export function FullDayPackages() {
 
                 <div
                   className={clsx(
-                    'mt-auto text-center font-sans text-xs tracking-[0.15em] uppercase py-2.5 rounded-md border transition-colors duration-500',
+                    'mt-auto text-center font-sans text-xs tracking-[0.15em] uppercase py-2.5 rounded-md border transition-colors duration-500 w-full',
                     selected === 'royal'
                       ? 'bg-forest text-cream border-forest'
-                      : 'border-charcoal/30 text-charcoal/70',
+                      : 'border-charcoal/30 text-charcoal/70 hover:bg-charcoal/5',
                   )}
                 >
                   {selected === 'royal' ? t.fullDay.selected : t.fullDay.selectCta}
                 </div>
               </motion.button>
             </div>
+
+            {/* 2. MOBILE COMPACT LAYOUT (hidden on desktop, vertical stacked on mobile) */}
+            <div className="grid grid-cols-1 gap-4 md:hidden">
+              {(['vip', 'royal'] as const).map((pkgId) => {
+                const isSelected = selected === pkgId
+                const price = getCollectionPrice(pkgId, city)
+                const name = pkgId === 'royal' ? 'Royal Collection' : 'VIP Collection'
+
+                return (
+                  <div
+                    key={pkgId}
+                    className={clsx(
+                      'rounded-xl border p-5 flex flex-col min-h-[140px] transition-all duration-300 bg-white',
+                      isSelected
+                        ? 'border-forest bg-forest/[0.04] shadow-sm'
+                        : 'border-charcoal/15',
+                    )}
+                  >
+                    {/* Top: name + price */}
+                    <div className="flex-1 mb-4">
+                      <span className="font-serif text-lg font-medium text-charcoal block">{name}</span>
+                      <p className="font-serif text-xl text-forest mt-1">{price}</p>
+                    </div>
+
+                    {/* Bottom: actions row */}
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setActiveModalPkgId(pkgId)}
+                        className="font-sans text-xs tracking-wider uppercase border border-charcoal/20 text-charcoal/70 py-2.5 rounded-lg bg-sand/40 hover:bg-sand transition-colors text-center"
+                      >
+                        {locale === 'ar' ? 'التفاصيل' : 'Details'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onSelect(pkgId)}
+                        className={clsx(
+                          'font-sans text-xs tracking-wider uppercase py-2.5 rounded-lg border transition-colors text-center',
+                          isSelected
+                            ? 'bg-forest border-forest text-cream'
+                            : 'border-forest text-forest hover:bg-forest/[0.04]',
+                        )}
+                      >
+                        {isSelected ? (locale === 'ar' ? 'مختارة' : 'Selected') : (locale === 'ar' ? 'اختر' : 'Select')}
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* 3. ELEGANT MOBILE DETAIL MODAL */}
+            <AnimatePresence>
+              {activeModalPkgId && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-charcoal/70 backdrop-blur-sm">
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.95 }}
+                    className="bg-sand w-full max-w-md rounded-2xl p-6 shadow-2xl border border-charcoal/10 max-h-[80vh] overflow-y-auto flex flex-col text-left"
+                  >
+                    {/* Header */}
+                    <div className="flex justify-between items-start mb-6">
+                      <div>
+                        <h3 className="font-serif text-2xl text-charcoal">
+                          {activeModalPkgId === 'royal' ? 'Royal Collection' : 'VIP Collection'}
+                        </h3>
+                        <p className="font-serif text-3xl text-forest mt-1">
+                          {getCollectionPrice(activeModalPkgId as 'vip' | 'royal', city)}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setActiveModalPkgId(null)}
+                        className="font-sans text-sm text-charcoal/50 hover:text-charcoal p-1"
+                        aria-label="Close modal"
+                      >
+                        ✕
+                      </button>
+                    </div>
+
+                    <div className="divider-hairline mb-6" />
+
+                    {/* Features list inside modal */}
+                    <div className="space-y-5 flex-1 overflow-y-auto mb-8 pr-1">
+                      <FeatureGroup title="Photography Team">
+                        <FeatureList items={activeFeatures.team} />
+                      </FeatureGroup>
+
+                      <AlbumBlock label="Luxury Album" album={activeFeatures.luxuryAlbum} />
+                      <AlbumBlock label="Companion Album" album={activeFeatures.companionAlbum} />
+
+                      <FeatureGroup title="Film">
+                        <p className="font-sans text-sm text-charcoal/75">{activeFeatures.film}</p>
+                      </FeatureGroup>
+
+                      <FeatureGroup title="Extras & Gifts">
+                        <FeatureList items={activeFeatures.extras} />
+                      </FeatureGroup>
+
+                      {'benefits' in activeFeatures && (
+                        <FeatureGroup title="Premium Benefits">
+                          <FeatureList items={(activeFeatures as any).benefits} />
+                        </FeatureGroup>
+                      )}
+                    </div>
+
+                    {/* Select button inside modal */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onSelect(activeModalPkgId)
+                        setActiveModalPkgId(null)
+                      }}
+                      className="w-full text-center font-sans text-xs tracking-[0.18em] uppercase py-3.5 rounded-lg bg-forest text-cream border border-forest hover:bg-forest-deep transition-colors duration-500"
+                    >
+                      {selected === activeModalPkgId
+                        ? (locale === 'ar' ? 'الباقة مختارة بالفعل' : 'Package Already Selected')
+                        : (locale === 'ar' ? 'اختيار هذه الباقة' : 'Select this Package')}
+                    </button>
+                  </motion.div>
+                </div>
+              )}
+            </AnimatePresence>
           </div>
         )}
       />
-    </Section>
+    </>
   )
 }

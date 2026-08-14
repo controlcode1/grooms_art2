@@ -11,14 +11,18 @@ export const Route = createFileRoute('/full-day')({
           'A narrative-driven, chronological account of full-day wedding photography and cinematic film coverage by Grooms Art.',
       },
     ],
+    links: [
+      {
+        rel: 'preload',
+        href: '/images/fullday-bg.jpg',
+        as: 'image',
+        fetchPriority: 'high',
+      } as any,
+    ],
   }),
   component: FullDayPage,
 })
 
 function FullDayPage() {
-  return (
-    <>
-      <FullDayPackages />
-    </>
-  )
+  return <FullDayPackages />
 }

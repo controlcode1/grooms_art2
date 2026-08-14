@@ -12,14 +12,18 @@ export const Route = createFileRoute('/sessions')({
           'Book your photography session with Grooms Art — choose your city, package, location, and date.',
       },
     ],
+    links: [
+      {
+        rel: 'preload',
+        href: '/images/fullday-bg.jpg',
+        as: 'image',
+        fetchPriority: 'high',
+      } as any,
+    ],
   }),
   component: SessionsPage,
 })
 
 function SessionsPage() {
-  return (
-    <Section className="pt-32 pb-24 md:pt-40 md:pb-32">
-      <SessionsWizard />
-    </Section>
-  )
+  return <SessionsWizard />
 }

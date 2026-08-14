@@ -102,9 +102,15 @@ export function CustomerInfoStep({ data, onChange }: CustomerInfoStepProps) {
             autoComplete="tel"
             dir="ltr"
           />
-          {phoneError && (
+          {phoneError ? (
             <p className="font-sans text-xs text-red-400/80 mt-1.5">
               {t.customerInfo.phone} {t.customerInfo.required.toLowerCase()}
+            </p>
+          ) : (
+            <p className="font-sans text-[11px] text-charcoal/45 mt-1.5 leading-normal">
+              {useI18n().locale === 'ar'
+                ? 'سنستخدم هذا الرقم للتواصل معك بشأن الحجز عبر الواتساب.'
+                : 'We will use this number to contact you about your booking via WhatsApp.'}
             </p>
           )}
         </div>

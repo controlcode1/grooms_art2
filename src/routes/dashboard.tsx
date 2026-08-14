@@ -142,6 +142,7 @@ function SectionHeading({ title, desc }: { title: string; desc?: string }) {
 function LoginScreen({ onLogin }: { onLogin: () => void }) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [shake, setShake] = useState(false)
@@ -179,15 +180,15 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
-        className="w-full max-w-sm"
+        className="w-full max-w-sm flex flex-col items-center text-center"
       >
-        <div className="flex items-center gap-3 mb-10">
+        <div className="flex items-center gap-3 mb-8 justify-center">
           <PalmEmblem className="w-8 h-8 text-sage" />
           <span className="font-serif text-xl text-cream">Grooms Art</span>
         </div>
 
         <h1 className="font-serif text-3xl text-cream mb-2">Studio Access</h1>
-        <p className="font-sans text-sm text-cream/45 mb-10">
+        <p className="font-sans text-sm text-cream/45 mb-8">
           Private photographer dashboard — restricted access.
         </p>
 
@@ -195,7 +196,7 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
           onSubmit={handleSubmit}
           animate={shake ? { x: [-8, 8, -6, 6, -3, 3, 0] } : { x: 0 }}
           transition={{ duration: 0.5 }}
-          className="space-y-4"
+          className="space-y-5 w-full text-left"
         >
           <label className="block">
             <span className="font-sans text-[10px] tracking-[0.22em] uppercase text-cream/40 block mb-2">
@@ -216,21 +217,41 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
             <span className="font-sans text-[10px] tracking-[0.22em] uppercase text-cream/40 block mb-2">
               Password
             </span>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => { setPassword(e.target.value); setError(null) }}
-              placeholder="••••••••"
-              className={clsx(
-                'w-full font-sans text-sm bg-white/05 border rounded-xl px-4 py-3.5 text-cream placeholder:text-cream/20 outline-none transition-all duration-300',
-                error
-                  ? 'border-red-400/60 focus:border-red-400'
-                  : 'border-cream/10 focus:border-sage/60 focus:bg-white/08',
-              )}
-              autoComplete="current-password"
-            />
+            <div className="relative">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+                onChange={(e) => { setPassword(e.target.value); setError(null) }}
+                placeholder="••••••••"
+                className={clsx(
+                  'w-full font-sans text-sm bg-white/05 border rounded-xl pl-4 pr-12 py-3.5 text-cream placeholder:text-cream/20 outline-none transition-all duration-300',
+                  error
+                    ? 'border-red-400/60 focus:border-red-400'
+                    : 'border-cream/10 focus:border-sage/60 focus:bg-white/08',
+                )}
+                autoComplete="current-password"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-cream/35 hover:text-cream/75 transition-colors focus-visible:outline-none"
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+              >
+                {showPassword ? (
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+                    <line x1="1" y1="1" x2="23" y2="23" />
+                  </svg>
+                ) : (
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                    <circle cx="12" cy="12" r="3" />
+                  </svg>
+                )}
+              </button>
+            </div>
             {error && (
-              <p className="font-sans text-xs text-red-400/80 mt-2">{error}</p>
+              <p className="font-sans text-xs text-red-400/80 mt-2 text-left">{error}</p>
             )}
           </label>
 
@@ -448,7 +469,40 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
   const [bookings, setBookings] = useState<Booking[]>([])
   const [bookingFilter, setBookingFilter] = useState<'all' | 'pending' | 'confirmed' | 'approved'>('all')
 
-  const reloadBookings = useCallback(() => {
+  const reloadBookings = useCallback(async () => {
+    if (supabase) {
+      try {
+        const { data, error } = await supabase
+          .from('bookings')
+          .select('*')
+          .order('created_at', { ascending: false })
+        if (error) throw error
+        if (data) {
+          const mapped: Booking[] = data.map((row: any) => ({
+            id: row.id,
+            type: row.type as BookingType,
+            status: row.status as BookingStatus,
+            city: row.city,
+            packageId: row.package_id,
+            location: row.location_id || row.location || '',
+            date: row.date,
+            customerInfo: {
+              fullName: row.full_name,
+              phone: row.phone,
+              email: row.email || '',
+              notes: row.notes || '',
+            },
+            createdAt: row.created_at,
+            whatsappTriggered: row.whatsapp_triggered,
+          }))
+          setBookings(mapped)
+          return
+        }
+      } catch (err) {
+        console.error('Failed to load bookings from Supabase, trying fallback:', err)
+      }
+    }
+    // Fallback to localStorage only if Supabase call failed or isn't configured
     setBookings(storage.get<Booking[]>(STORAGE_KEYS.bookings) || [])
   }, [])
 
@@ -456,7 +510,27 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
     reloadBookings()
   }, [reloadBookings])
 
-  const updateBookingStatus = (id: string, newStatus: BookingStatus) => {
+  const updateBookingStatus = async (id: string, newStatus: BookingStatus) => {
+    let updatedDb = false
+    const currentBooking = bookings.find((b) => b.id === id)
+    if (!currentBooking) return
+
+    if (supabase) {
+      try {
+        const { error } = await supabase
+          .from('bookings')
+          .update({
+            status: newStatus,
+            whatsapp_triggered: newStatus === 'confirmed' ? true : currentBooking.whatsappTriggered
+          })
+          .eq('id', id)
+        if (error) throw error
+        updatedDb = true
+      } catch (err) {
+        console.error('Failed to update booking status in Supabase:', err)
+      }
+    }
+
     const updated = bookings.map((b) => {
       if (b.id === id) {
         const item = { ...b, status: newStatus }
@@ -468,14 +542,33 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
       }
       return b
     })
-    storage.set(STORAGE_KEYS.bookings, updated)
+
+    if (!updatedDb) {
+      storage.set(STORAGE_KEYS.bookings, updated)
+    }
     setBookings(updated)
   }
 
-  const deleteBooking = (id: string) => {
+  const deleteBooking = async (id: string) => {
     if (!confirm('Are you sure you want to delete this booking record?')) return
+    let deletedDb = false
+    if (supabase) {
+      try {
+        const { error } = await supabase
+          .from('bookings')
+          .delete()
+          .eq('id', id)
+        if (error) throw error
+        deletedDb = true
+      } catch (err) {
+        console.error('Failed to delete booking from Supabase:', err)
+      }
+    }
+
     const updated = bookings.filter((b) => b.id !== id)
-    storage.set(STORAGE_KEYS.bookings, updated)
+    if (!deletedDb) {
+      storage.set(STORAGE_KEYS.bookings, updated)
+    }
     setBookings(updated)
   }
 
@@ -491,6 +584,7 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
 
   // ─── State for Availability ───
   const [blockedDates, setBlockedDates] = useState<string[]>([])
+  const [fullyBookedDates, setFullyBookedDates] = useState<string[]>([])
   const [newBlockedDate, setNewBlockedDate] = useState('')
   const [selectedCity, setSelectedCity] = useState<CityId>('baghdad')
   const [locationsMap, setLocationsMap] = useState<Record<CityId, Location[]>>(DEFAULT_LOCATIONS)
@@ -532,7 +626,7 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
     for (let d = 1; d <= daysInMonth; d++) {
       const date = new Date(availCursor.year, availCursor.month, d)
       const iso = toLocalISODate(date)
-      const isBlocked = blockedDates.includes(iso)
+      const isBlocked = blockedDates.includes(iso) || fullyBookedDates.includes(iso)
       const isToday = iso === todayIso
       const isPast = iso < todayIso
       grid.push({ iso, day: d, isToday, isBlocked, isPast })
@@ -544,10 +638,11 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
     }
 
     return grid
-  }, [availCursor, blockedDates, today])
+  }, [availCursor, blockedDates, fullyBookedDates, today])
 
   const reloadAvailability = useCallback(() => {
     setBlockedDates(storage.get<string[]>(STORAGE_KEYS.blockedDates) || [])
+    setFullyBookedDates(storage.get<string[]>('ga_fully_booked_dates') || [])
     const storedLocs = storage.get<Record<CityId, Location[]>>(STORAGE_KEYS.locations)
     if (storedLocs) {
       setLocationsMap(storedLocs)
@@ -563,8 +658,8 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
   const blockDate = (e: React.FormEvent) => {
     e.preventDefault()
     if (!newBlockedDate) return
-    if (blockedDates.includes(newBlockedDate)) {
-      alert('This date is already blocked.')
+    if (blockedDates.includes(newBlockedDate) || fullyBookedDates.includes(newBlockedDate)) {
+      alert('This date is already blocked or fully booked.')
       return
     }
     const updated = [...blockedDates, newBlockedDate].sort()
@@ -577,17 +672,46 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
     const updated = blockedDates.filter((d) => d !== dateStr)
     storage.set(STORAGE_KEYS.blockedDates, updated)
     setBlockedDates(updated)
+    const updatedFully = fullyBookedDates.filter((d) => d !== dateStr)
+    storage.set('ga_fully_booked_dates', updatedFully)
+    setFullyBookedDates(updatedFully)
   }
 
   const toggleBlockDate = (dateStr: string) => {
     let updated: string[]
-    if (blockedDates.includes(dateStr)) {
+    if (blockedDates.includes(dateStr) || fullyBookedDates.includes(dateStr)) {
       updated = blockedDates.filter((d) => d !== dateStr)
+      const updatedFully = fullyBookedDates.filter((d) => d !== dateStr)
+      storage.set('ga_fully_booked_dates', updatedFully)
+      setFullyBookedDates(updatedFully)
     } else {
       updated = [...blockedDates, dateStr].sort()
     }
     storage.set(STORAGE_KEYS.blockedDates, updated)
     setBlockedDates(updated)
+  }
+
+  const toggleFullyBooked = (dateStr: string) => {
+    let updated: string[]
+    if (fullyBookedDates.includes(dateStr)) {
+      updated = fullyBookedDates.filter((d) => d !== dateStr)
+      // If removed from fully booked, make sure it is back in blockedDates
+      if (!blockedDates.includes(dateStr)) {
+        const newBlocked = [...blockedDates, dateStr].sort()
+        storage.set(STORAGE_KEYS.blockedDates, newBlocked)
+        setBlockedDates(newBlocked)
+      }
+    } else {
+      updated = [...fullyBookedDates, dateStr].sort()
+      // If added to fully booked, also make sure it is in blockedDates for easy logic
+      if (!blockedDates.includes(dateStr)) {
+        const newBlocked = [...blockedDates, dateStr].sort()
+        storage.set(STORAGE_KEYS.blockedDates, newBlocked)
+        setBlockedDates(newBlocked)
+      }
+    }
+    storage.set('ga_fully_booked_dates', updated)
+    setFullyBookedDates(updated)
   }
 
   const addLocation = (e: React.FormEvent) => {
@@ -768,7 +892,7 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
     <div className="min-h-screen bg-[#F5F3EE]" dir="ltr">
       {/* Header bar */}
       <header className="fixed inset-x-0 top-0 z-50 p-4 md:p-6 flex justify-center">
-        <div className="w-full max-w-6xl flex items-center justify-between px-6 md:px-10 py-3.5 rounded-full bg-[#F5F3EE]/20 backdrop-blur-md border border-charcoal/08 shadow-sm">
+        <div className="w-full max-w-6xl flex items-center justify-between px-6 md:px-10 py-3.5 rounded-full bg-[#F5F3EE]/40 backdrop-blur-md border border-charcoal/05">
           <Link to="/" className="block py-0.5 transition-opacity duration-300 hover:opacity-85">
             <img
               src="/images/logo.png"
@@ -951,59 +1075,61 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
                     </div>
 
                     <div className="flex flex-col gap-2 justify-end shrink-0 pt-4 md:pt-0 border-t md:border-t-0 border-charcoal/05 w-full md:w-52 animate-fadeIn">
-                      {/* Welcome & Deposit Button */}
-                      {b.status === 'pending' ? (
-                        <button
-                          type="button"
-                          onClick={() => handleWelcomeSend(b)}
-                          className="w-full font-sans text-[10px] tracking-[0.12em] uppercase bg-red-600 text-cream hover:bg-red-700 px-3 py-2.5 rounded-lg transition-colors font-medium text-center"
-                        >
-                          {d.sendWelcome}
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          disabled
-                          className="w-full font-sans text-[10px] tracking-[0.12em] uppercase bg-charcoal/05 text-charcoal/30 px-3 py-2.5 rounded-lg cursor-not-allowed text-center"
-                        >
-                          {d.welcomeSent}
-                        </button>
-                      )}
+                      <div className="grid grid-cols-2 gap-2 w-full md:flex md:flex-col">
+                        {/* Welcome & Deposit Button */}
+                        {b.status === 'pending' ? (
+                          <button
+                            type="button"
+                            onClick={() => handleWelcomeSend(b)}
+                            className="w-full font-sans text-[10px] tracking-[0.12em] uppercase bg-red-600 text-cream hover:bg-red-700 px-3 py-2.5 rounded-lg transition-colors font-medium text-center flex items-center justify-center min-h-[38px]"
+                          >
+                            {d.sendWelcome}
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            disabled
+                            className="w-full font-sans text-[10px] tracking-[0.12em] uppercase bg-charcoal/05 text-charcoal/30 px-3 py-2.5 rounded-lg cursor-not-allowed text-center flex items-center justify-center min-h-[38px]"
+                          >
+                            {d.welcomeSent}
+                          </button>
+                        )}
 
-                      {/* Send Final Confirm Button */}
-                      {b.status === 'pending' && (
-                        <button
-                          type="button"
-                          disabled
-                          className="w-full font-sans text-[10px] tracking-[0.12em] uppercase bg-charcoal/05 text-charcoal/30 px-3 py-2.5 rounded-lg cursor-not-allowed text-center"
-                        >
-                          {d.sendFinal}
-                        </button>
-                      )}
-                      {b.status === 'confirmed' && (
-                        <button
-                          type="button"
-                          onClick={() => handleFinalSend(b)}
-                          className="w-full font-sans text-[10px] tracking-[0.12em] uppercase bg-forest text-cream hover:bg-forest-deep px-3 py-2.5 rounded-lg transition-colors font-semibold text-center"
-                        >
-                          {d.sendFinal}
-                        </button>
-                      )}
-                      {b.status === 'approved' && (
-                        <button
-                          type="button"
-                          disabled
-                          className="w-full font-sans text-[10px] tracking-[0.12em] uppercase bg-yellow-400 text-yellow-950 px-3 py-2.5 rounded-lg cursor-not-allowed font-semibold text-center"
-                        >
-                          {d.bookingApproved}
-                        </button>
-                      )}
+                        {/* Send Final Confirm Button */}
+                        {b.status === 'pending' && (
+                          <button
+                            type="button"
+                            disabled
+                            className="w-full font-sans text-[10px] tracking-[0.12em] uppercase bg-charcoal/05 text-charcoal/30 px-3 py-2.5 rounded-lg cursor-not-allowed text-center flex items-center justify-center min-h-[38px]"
+                          >
+                            {d.sendFinal}
+                          </button>
+                        )}
+                        {b.status === 'confirmed' && (
+                          <button
+                            type="button"
+                            onClick={() => handleFinalSend(b)}
+                            className="w-full font-sans text-[10px] tracking-[0.12em] uppercase bg-forest text-cream hover:bg-forest-deep px-3 py-2.5 rounded-lg transition-colors font-semibold text-center flex items-center justify-center min-h-[38px]"
+                          >
+                            {d.sendFinal}
+                          </button>
+                        )}
+                        {b.status === 'approved' && (
+                          <button
+                            type="button"
+                            disabled
+                            className="w-full font-sans text-[10px] tracking-[0.12em] uppercase bg-yellow-400 text-yellow-950 px-3 py-2.5 rounded-lg cursor-not-allowed font-semibold text-center flex items-center justify-center min-h-[38px]"
+                          >
+                            {d.bookingApproved}
+                          </button>
+                        )}
+                      </div>
 
                       {/* Delete Record Button */}
                       <button
                         type="button"
                         onClick={() => deleteBooking(b.id)}
-                        className="w-full font-sans text-[10px] tracking-[0.15em] uppercase bg-black text-white hover:bg-charcoal px-3 py-2.5 rounded-lg transition-colors text-center"
+                        className="w-full font-sans text-[10px] tracking-[0.15em] uppercase bg-black text-white hover:bg-charcoal px-3 py-2.5 rounded-lg transition-colors text-center flex items-center justify-center min-h-[38px]"
                       >
                         {d.deleteRecord}
                       </button>
@@ -1110,6 +1236,7 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
                         )
                       }
 
+                      const isFullyBooked = fullyBookedDates.includes(cell.iso || '')
                       return (
                         <motion.button
                           key={cell.iso}
@@ -1119,13 +1246,15 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
                           className={clsx(
                             'flex items-center justify-center h-8 w-8 mx-auto rounded-full',
                             'font-sans text-xs transition-all duration-200',
-                            cell.isBlocked
-                              ? 'bg-forest/10 border border-forest/20 text-forest font-medium'
-                              : cell.isToday
-                                ? 'border border-forest/30 text-forest hover:bg-forest/05'
-                                : 'text-charcoal hover:bg-forest/05 hover:text-forest',
+                            isFullyBooked
+                              ? 'bg-red-500/10 border border-red-500/30 text-red-700 font-medium'
+                              : cell.isBlocked
+                                ? 'bg-forest/10 border border-forest/20 text-forest font-medium'
+                                : cell.isToday
+                                  ? 'border border-forest/30 text-forest hover:bg-forest/05'
+                                  : 'text-charcoal hover:bg-forest/05 hover:text-forest',
                           )}
-                          title={cell.isBlocked ? 'Click to Unblock' : 'Click to Block'}
+                          title={isFullyBooked ? 'Fully Booked - Click to Unblock' : cell.isBlocked ? 'Blocked - Click to Unblock' : 'Click to Block'}
                         >
                           {cell.day}
                         </motion.button>
@@ -1143,18 +1272,35 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
                   </p>
                 ) : (
                   <ul className="divide-y divide-charcoal/06 max-h-52 overflow-y-auto pr-1">
-                    {blockedDates.map((date) => (
-                      <li key={date} className="py-2 flex items-center justify-between text-xs">
-                        <span className="font-sans text-charcoal/85 font-medium">{date}</span>
-                        <button
-                          type="button"
-                          onClick={() => unblockDate(date)}
-                          className="font-sans text-[10px] tracking-wider uppercase text-red-500 hover:text-red-700 font-semibold"
-                        >
-                          {d.unblock}
-                        </button>
-                      </li>
-                    ))}
+                    {blockedDates.map((date) => {
+                      const isFullyBooked = fullyBookedDates.includes(date)
+                      return (
+                        <li key={date} className="py-2 flex items-center justify-between text-xs gap-4">
+                          <span className="font-sans text-charcoal/85 font-medium">{date}</span>
+                          <div className="flex items-center gap-3">
+                            <button
+                              type="button"
+                              onClick={() => toggleFullyBooked(date)}
+                              className={clsx(
+                                'font-sans text-[10px] tracking-wider uppercase px-2.5 py-1 rounded transition-colors font-medium',
+                                isFullyBooked
+                                  ? 'bg-red-100 text-red-700 hover:bg-red-200'
+                                  : 'bg-charcoal/05 text-charcoal/60 hover:bg-charcoal/10'
+                              )}
+                            >
+                              {isFullyBooked ? '🔴 Fully Booked' : 'Mark Fully Booked'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => unblockDate(date)}
+                              className="font-sans text-[10px] tracking-wider uppercase text-charcoal/40 hover:text-red-600 font-semibold"
+                            >
+                              {locale === 'ar' ? 'فتح اليوم' : 'Reopen'}
+                            </button>
+                          </div>
+                        </li>
+                      )
+                    })}
                   </ul>
                 )}
               </div>

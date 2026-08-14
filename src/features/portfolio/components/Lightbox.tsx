@@ -99,17 +99,10 @@ export function Lightbox({ images, index, onClose, onNavigate }: LightboxProps) 
         </div>
 
         <div
-          className="px-6 py-6 md:px-10 flex flex-col md:flex-row md:items-end md:justify-between gap-4 border-t border-cream/10"
+          className="px-6 py-6 md:px-10 flex items-center justify-center border-t border-cream/10"
           onClick={(e) => e.stopPropagation()}
         >
-          <h3 className="font-serif text-xl md:text-2xl text-cream">{image.title}</h3>
-          <div className="flex flex-wrap gap-x-6 gap-y-1 font-sans text-[11px] tracking-[0.1em] uppercase text-cream/50">
-            <span>{image.exif.camera}</span>
-            <span>{image.exif.focalLength}</span>
-            <span>{image.exif.aperture}</span>
-            <span>{image.exif.shutter}</span>
-            <span>{image.exif.iso}</span>
-          </div>
+          <h3 className="font-serif text-xl md:text-2xl text-cream text-center">{image.title}</h3>
         </div>
       </motion.div>
     </AnimatePresence>

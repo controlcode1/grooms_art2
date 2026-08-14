@@ -133,7 +133,7 @@ export const ar: Dictionary = {
     subtitle: 'بعض التفاصيل لنتمكن من التواصل معك بعد الحجز.',
     fullName: 'الاسم الكامل',
     fullNamePlaceholder: 'اسمك الكامل',
-    phone: 'رقم الهاتف',
+    phone: 'رقم الواتساب',
     phonePlaceholder: '+964 7XX XXX XXXX',
     email: 'البريد الإلكتروني',
     emailPlaceholder: 'your@email.com',

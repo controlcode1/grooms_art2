@@ -93,21 +93,23 @@ export function BookingWizard() {
       </AnimatePresence>
 
       {step !== 'deposit' && (
-        <div className="flex items-center gap-4 mt-12 pt-8 border-t border-charcoal/10">
-          {stepIndex > 0 && (
+        <div className="flex items-center justify-between gap-4 mt-12 pt-8 border-t border-charcoal/10 w-full">
+          {stepIndex > 0 ? (
             <button
               type="button"
               onClick={goBack}
-              className="font-sans text-xs tracking-[0.2em] uppercase text-charcoal/60 hover:text-forest transition-colors duration-500"
+              className="font-sans text-xs tracking-[0.15em] uppercase border border-charcoal/30 text-charcoal/70 px-6 py-3 rounded-lg hover:bg-charcoal/5 transition-all text-center min-w-[100px]"
             >
               {t.booking.back}
             </button>
+          ) : (
+            <div />
           )}
           <button
             type="button"
             onClick={goNext}
             disabled={!canContinue}
-            className="font-sans text-xs tracking-[0.2em] uppercase bg-forest text-cream px-8 py-4 hover:bg-forest-deep transition-colors duration-500 disabled:opacity-40 disabled:cursor-not-allowed ms-auto"
+            className="font-sans text-xs tracking-[0.15em] uppercase bg-forest text-cream px-6 py-3 rounded-lg hover:bg-forest-deep transition-all disabled:opacity-40 disabled:cursor-not-allowed text-center min-w-[100px]"
           >
             {t.booking.continue}
           </button>

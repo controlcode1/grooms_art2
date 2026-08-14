@@ -75,11 +75,13 @@ export function LocationStep({ city, selected, onSelect }: LocationStepProps) {
         <p className="font-sans text-sm text-charcoal/80 leading-relaxed text-left">
           {locale === 'ar' ? (
             <>
-              <span className="font-semibold text-forest">ملاحظة:</span> سيتم الاتفاق على اختيار الموقع مباشرة مع المصور.
+              <span className="font-semibold text-forest">ملاحظة:</span>{' '}
+              المواقع المدرجة هي مواقعنا الموصى بها. إذا كنت تفضل موقعًا آخر، يمكن ترتيب ذلك بالاتفاق المباشر مع المصور.
             </>
           ) : (
             <>
-              <span className="font-semibold text-forest">Note:</span> Location choice will be agreed upon directly with the photographer.
+              <span className="font-semibold text-forest">Note:</span>{' '}
+              The listed locations are our recommended locations. If you prefer a different location, it can be arranged exclusively through mutual agreement with the photographer.
             </>
           )}
         </p>

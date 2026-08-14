@@ -17,6 +17,7 @@ export function Navbar() {
   const { t, locale, toggleLocale } = useI18n()
   const [scrolled, setScrolled] = useState(false)
   const [open, setOpen] = useState(false)
+  const [bgIsDark, setBgIsDark] = useState(false)
   const pathname = useRouterState({ select: (s) => s.location.pathname })
 
   useEffect(() => {
@@ -30,11 +31,23 @@ export function Navbar() {
     setOpen(false)
   }, [pathname])
 
-  const isHome = pathname === '/'
-  const isLightHeader = isHome && !scrolled && !open
+  // Watch body.dataset.headerTheme — set by pages/components with dark backgrounds
+  // via the useHeaderTheme() hook. MutationObserver keeps this in sync reactively.
+  useEffect(() => {
+    function sync() {
+      setBgIsDark(document.body.dataset.headerTheme === 'light')
+    }
+    sync() // read initial value (handles SSR hydration race)
+    const observer = new MutationObserver(sync)
+    observer.observe(document.body, { attributes: true, attributeFilter: ['data-header-theme'] })
+    return () => observer.disconnect()
+  }, [])
+
+  // Light header = transparent navbar over a dark background AND not yet scrolled
+  const isLightHeader = bgIsDark && !scrolled && !open
 
   return (
-    <header className="fixed inset-x-0 top-0 z-50 p-4 md:p-6 flex justify-center pointer-events-none">
+    <header className="fixed inset-x-0 top-0 z-50 p-4 md:p-6 flex flex-col items-center gap-2 pointer-events-none">
       <nav
         className={clsx(
           'w-full max-w-6xl flex items-center justify-between px-6 md:px-10 py-3.5 rounded-full transition-all duration-500 border pointer-events-auto',
@@ -119,7 +132,7 @@ export function Navbar() {
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: -8, opacity: 0 }}
             transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-            className="absolute top-[80px] left-4 right-4 md:hidden overflow-hidden rounded-3xl border border-charcoal/10 bg-sand/95 backdrop-blur-md shadow-lg pointer-events-auto"
+            className="w-full max-w-6xl overflow-hidden rounded-3xl border border-charcoal/10 bg-sand/95 backdrop-blur-md shadow-lg pointer-events-auto md:hidden"
           >
             <div className="flex flex-col px-6 py-6 gap-5">
               {links.map((link) => (

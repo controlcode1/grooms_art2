@@ -141,7 +141,7 @@ export const en: Dictionary = {
     subtitle: 'Just a few details so we can reach you after your booking.',
     fullName: 'Full Name',
     fullNamePlaceholder: 'Your full name',
-    phone: 'Phone Number',
+    phone: 'WhatsApp Number',
     phonePlaceholder: '+964 7XX XXX XXXX',
     email: 'Email Address',
     emailPlaceholder: 'your@email.com',

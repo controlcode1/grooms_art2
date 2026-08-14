@@ -32,25 +32,28 @@ const CITIES = [
   },
 ]
 
+import { useHeaderTheme } from '@/lib/hooks/useHeaderTheme'
+
 export function CityStep({ selected, onSelect }: CityStepProps) {
   const { t, locale } = useI18n()
   const bgImage = '/images/fullday-bg.jpg'
+  useHeaderTheme('light')
 
   return (
     /*
-     * This wrapper fills remaining viewport height under the navbar.
-     * We use a negative margin trick to escape the Section padding
-     * so the background bleeds edge-to-edge.
+     * This wrapper fills the entire viewport.
+     * We use fixed inset-0 to escape all layout boundaries and padding.
      */
     <div
-      className="relative -mx-6 md:-mx-12 lg:-mx-20 -mt-20 md:-mt-28 -mb-20 md:-mb-28 flex items-center justify-center"
-      style={{ minHeight: '100svh' }}
+      className="fixed inset-0 w-screen h-screen flex flex-col items-center justify-center p-4 pt-24 pb-8 z-10 overflow-y-auto"
     >
-      {/* Full-bleed background image — covers entire element */}
-      <div
-        className="absolute inset-0 bg-cover bg-center bg-no-repeat"
-        style={{ backgroundImage: `url('${bgImage}')` }}
+      {/* Full-bleed background image — covers entire viewport */}
+      <img
+        src={bgImage}
+        alt=""
+        className="absolute inset-0 w-full h-full object-cover"
         aria-hidden="true"
+        fetchPriority="high"
       />
 
       {/* Dark overlay for readability */}

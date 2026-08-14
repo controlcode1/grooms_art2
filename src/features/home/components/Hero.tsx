@@ -2,6 +2,8 @@ import { motion } from 'motion/react'
 import { Link } from '@tanstack/react-router'
 import { useI18n } from '@/lib/i18n'
 
+import { useHeaderTheme } from '@/lib/hooks/useHeaderTheme'
+
 /**
  * Set this once you've added your own footage, e.g. '/videos/hero.mp4'.
  * Until then, the hero renders an elegant brand-colour treatment instead of
@@ -13,6 +15,7 @@ const HERO_POSTER_SRC = '/images/hero-poster.webp'
 export function Hero() {
   const { t } = useI18n()
   const [heroLine1, heroLine2] = t.home.heroTitle.split('\n')
+  useHeaderTheme('light')
 
   return (
     <section className="relative h-screen min-h-[560px] w-full overflow-hidden bg-forest-deep">
@@ -23,7 +26,13 @@ export function Hero() {
           muted
           loop
           playsInline
-          preload="metadata"
+          /**
+           * preload="none" tells the browser NOT to download video bytes until
+           * playback starts — the poster image acts as the LCP element instead.
+           * Autoplay still fires immediately on desktop/mobile once the browser
+           * is ready, but the poster renders instantly with zero network cost.
+           */
+          preload="none"
           poster={HERO_POSTER_SRC}
           src={HERO_VIDEO_SRC}
         />
