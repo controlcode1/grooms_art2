@@ -1,4 +1,5 @@
 import { storage, STORAGE_KEYS } from '@/lib/storage'
+import { supabase } from '@/lib/supabase/client'
 
 export type PortfolioCategory = string
 
@@ -18,6 +19,8 @@ export interface PortfolioImage {
     shutter: string
     iso: string
   }
+  dbId?: string       // Supabase UUID for deletion
+  storagePath?: string // Supabase storage path
 }
 
 const PORTRAIT_FRAMES = new Set(['frame-05', 'frame-07', 'frame-12'])
@@ -171,9 +174,20 @@ export function savePortfolioImages(images: PortfolioImage[]): void {
 // Keep the legacy export for compatibility where needed, but it's recommended to call getPortfolioImages()
 export const portfolioImages = staticPortfolioImages
 
+export function getPublicUrl(storagePath: string): string {
+  if (!supabase) return ''
+  const { data } = supabase.storage.from('portfolio').getPublicUrl(storagePath)
+  return data.publicUrl
+}
+
 export function imageSrcSet(id: string) {
-  // If id is a base64 / data URL (custom uploaded image), return it directly for all sizes
-  if (id.startsWith('data:') || id.startsWith('blob:')) {
+  // If id is a base64, blob, or custom HTTP public URL, return it directly for all sizes
+  if (
+    id.startsWith('data:') ||
+    id.startsWith('blob:') ||
+    id.startsWith('http:') ||
+    id.startsWith('https:')
+  ) {
     return {
       sm: id,
       md: id,

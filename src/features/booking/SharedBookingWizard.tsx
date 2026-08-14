@@ -7,7 +7,7 @@ import { CityStep } from '@/features/sessions/components/CityStep'
 import { LocationStep } from '@/features/sessions/components/LocationStep'
 import { SessionDateStep } from '@/features/sessions/components/SessionDateStep'
 import { CustomerInfoStep, type CustomerInfoData } from '@/features/sessions/components/CustomerInfoStep'
-import { getLocationsForCity, type Location } from '@/lib/data/locations'
+import { getLocationsForCity, DEFAULT_LOCATIONS, type Location } from '@/lib/data/locations'
 import { storage, STORAGE_KEYS } from '@/lib/storage'
 import type { BookingType } from '@/lib/types/booking'
 import { supabase } from '@/lib/supabase/client'
@@ -90,13 +90,71 @@ export function SharedBookingWizard({
     } as CustomerInfoData,
   })
 
+  const [dbBlockedDates, setDbBlockedDates] = useState<string[]>([])
+  const [dbLocations, setDbLocations] = useState<Location[]>([])
+
+  useEffect(() => {
+    if (!supabase) return
+    const client = supabase
+
+    const loadBlockedDates = async () => {
+      const { data, error } = await client.from('blocked_dates').select('date')
+      if (!error && data) {
+        setDbBlockedDates(data.map((d: any) => d.date))
+      }
+    }
+
+    const loadLocations = async () => {
+      const { data, error } = await client.from('locations').select('*')
+      if (!error && data) {
+        setDbLocations(
+          data.map((l: any) => ({
+            id: l.id,
+            city: l.city,
+            name: l.name,
+            nameAr: l.name_ar,
+            description: l.description || '',
+            descriptionAr: l.description_ar || '',
+          }))
+        )
+      }
+    }
+
+    loadBlockedDates()
+    loadLocations()
+
+    const blockedChannel = client
+      .channel('public_blocked_dates_realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'blocked_dates' }, () => {
+        loadBlockedDates()
+      })
+      .subscribe()
+
+    const locationsChannel = client
+      .channel('public_locations_realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'locations' }, () => {
+        loadLocations()
+      })
+      .subscribe()
+
+    return () => {
+      client.removeChannel(blockedChannel)
+      client.removeChannel(locationsChannel)
+    }
+  }, [])
+
   const step = STEPS[stepIndex]
   const stepLabels = locale === 'ar' ? STEP_LABELS_AR : STEP_LABELS_EN
 
-  // Load custom locations & blocked dates from storage
-  const customLocationsMap = storage.get<Record<string, Location[]>>(STORAGE_KEYS.locations) || {}
   const cityId = (state.city === 'erbil' ? 'erbil' : 'baghdad') as 'baghdad' | 'erbil'
-  const locations = getLocationsForCity(cityId, customLocationsMap[cityId])
+  
+  // Use real-time locations from Supabase, or default locations if empty/failed
+  const locations = useMemo(() => {
+    const filtered = dbLocations.filter((l) => l.city === cityId)
+    if (filtered.length > 0) return filtered
+    return DEFAULT_LOCATIONS[cityId] ?? []
+  }, [dbLocations, cityId])
+
   const selectedLocationObj = locations.find((l) => l.id === state.locationId)
   const locationLabel =
     state.locationId === 'agreed-later'
@@ -108,11 +166,8 @@ export function SharedBookingWizard({
         : '—'
 
   const blockedDatesSet = useMemo(() => {
-    const blocked = storage.get<string[]>(STORAGE_KEYS.blockedDates) || []
-    const fullyBooked = storage.get<string[]>('ga_fully_booked_dates') || []
-    return new Set([...blocked, ...fullyBooked])
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+    return new Set(dbBlockedDates)
+  }, [dbBlockedDates])
 
   const canContinue =
     (step === 'city' && !!state.city) ||
@@ -190,9 +245,9 @@ export function SharedBookingWizard({
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
-      className="max-w-md space-y-6"
+      className="max-w-md space-y-6 text-start"
     >
-      <div className="flex flex-col items-start text-start">
+      <div className="flex flex-col items-start">
         <motion.div
           initial={{ scale: 0.85, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
@@ -203,36 +258,22 @@ export function SharedBookingWizard({
             <path d="M4 10.5L8 14.5L16 6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </motion.div>
-        <h2 className="font-serif text-2xl md:text-3xl text-charcoal mb-2">
-          {successTitle || t.sessions.successTitle}
+        <h2 className="font-serif text-2xl md:text-3xl text-charcoal mb-4">
+          {locale === 'ar' ? 'تم إرسال طلب الحجز بنجاح' : 'Booking Submitted Successfully'}
         </h2>
-        <p className="font-sans text-sm text-charcoal/60 leading-relaxed">
-          {successBody || t.sessions.successBody}
+        <p className="font-sans text-sm text-charcoal/70 leading-relaxed space-y-2">
+          {locale === 'ar' ? (
+            <>
+              شكراً لكِ على الحجز. تم استلام طلبكِ بنجاح.<br />
+              سيقوم فريقنا بمراجعة حجزكِ بعناية والتواصل معكِ خلال <b>٤٨ ساعة</b> لتأكيد كافة التفاصيل.
+            </>
+          ) : (
+            <>
+              Thank you for your booking. Your request has been successfully received.<br />
+              Our team will carefully review your booking and contact you within <b>48 hours</b> to confirm all details.
+            </>
+          )}
         </p>
-      </div>
-
-      {/* Welcoming Card in Grooms Art Theme */}
-      <div className="bg-linen/40 border border-charcoal/10 rounded-2xl p-6 space-y-4 shadow-sm text-start">
-        <p className="font-serif italic text-[15px] text-charcoal leading-relaxed">
-          {locale === 'ar' 
-            ? '« أهلاً بكِ في استوديو Grooms Art. نحن هنا لا لنلتقط مجرد صور، بل لنروي قصتكم بصدق ودفء، مسترشدين بالضوء الطبيعي واللحظات العفوية. »' 
-            : '“Welcome to Grooms Art Studio. We are not here to merely take photos; we are here to honestly tell your story, guided by natural light and the quiet seconds in between.”'}
-        </p>
-        <div className="divider-hairline" />
-        <div className="space-y-2 font-sans text-xs text-charcoal/70">
-          <div className="flex justify-between items-center">
-            <span className="font-medium text-charcoal/50 uppercase tracking-wider">{locale === 'ar' ? 'الاسم:' : 'Name:'}</span>
-            <span className="text-charcoal font-medium">{state.customerInfo.fullName}</span>
-          </div>
-          <div className="flex justify-between items-center">
-            <span className="font-medium text-charcoal/50 uppercase tracking-wider">{locale === 'ar' ? 'التاريخ:' : 'Date:'}</span>
-            <span className="text-charcoal font-medium">{state.date}</span>
-          </div>
-          <div className="flex justify-between items-center">
-            <span className="font-medium text-charcoal/50 uppercase tracking-wider">{locale === 'ar' ? 'الباقة:' : 'Package:'}</span>
-            <span className="text-charcoal font-medium">{state.packageId ? packageNames[state.packageId] ?? state.packageId : '—'}</span>
-          </div>
-        </div>
       </div>
     </motion.div>
   ) : (
@@ -255,6 +296,7 @@ export function SharedBookingWizard({
               city={state.city}
               selected={state.locationId}
               onSelect={(locationId) => setState((s) => ({ ...s, locationId }))}
+              locations={locations}
             />
           )}
 
@@ -326,8 +368,8 @@ export function SharedBookingWizard({
         </motion.div>
       </AnimatePresence>
 
-      {/* Navigation buttons — hidden on city and confirm steps */}
-      {step !== 'city' && step !== 'confirm' && (
+      {/* Navigation buttons — hidden on confirm step */}
+      {step !== 'confirm' && (
         <div className="flex items-center justify-between gap-4 mt-12 pt-8 border-t border-charcoal/10 w-full">
           <button
             type="button"

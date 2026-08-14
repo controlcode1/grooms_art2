@@ -134,7 +134,7 @@ export function SessionDateStep({ selected, onSelect, blockedDates }: SessionDat
     }
 
     return { cells: grid, monthLabel: label }
-  }, [viewMonth, viewYear, minDate, maxDate, today, monthNames])
+  }, [viewMonth, viewYear, minDate, maxDate, today, monthNames, blockedDates])
 
   return (
     <div className="flex flex-col items-center">

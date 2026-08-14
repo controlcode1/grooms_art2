@@ -8,14 +8,15 @@ export type FilterValue = string // 'all' | 'full-day' | PortfolioCategory
 interface CategoryFilterProps {
   value: FilterValue
   onChange: (value: FilterValue) => void
+  categories?: CategoryInfo[]
 }
 
-export function CategoryFilter({ value, onChange }: CategoryFilterProps) {
+export function CategoryFilter({ value, onChange, categories }: CategoryFilterProps) {
   const { t, locale } = useI18n()
   const [hovered, setHovered] = useState<string | null>(null)
 
   const options = useMemo(() => {
-    const dynamicCats = getPortfolioCategories()
+    const dynamicCats = categories || getPortfolioCategories()
     const list: { key: FilterValue; label: string }[] = [
       { key: 'all', label: t.portfolio.filters.all },
     ]
@@ -32,7 +33,7 @@ export function CategoryFilter({ value, onChange }: CategoryFilterProps) {
     list.push({ key: 'full-day', label: t.portfolio.filters.fullDay })
 
     return list
-  }, [t, locale])
+  }, [t, locale, categories])
 
   return (
     <div className="flex flex-wrap gap-x-8 gap-y-3 border-b border-charcoal/10 pb-6">
