@@ -9,7 +9,7 @@ import { SessionDateStep } from '@/features/sessions/components/SessionDateStep'
 import { CustomerInfoStep, type CustomerInfoData } from '@/features/sessions/components/CustomerInfoStep'
 import { getLocationsForCity, type Location } from '@/lib/data/locations'
 import { storage, STORAGE_KEYS } from '@/lib/storage'
-import type { Booking, BookingType } from '@/lib/types/booking'
+import type { BookingType } from '@/lib/types/booking'
 import { supabase } from '@/lib/supabase/client'
 
 type Step = 'city' | 'package' | 'location' | 'date' | 'customerInfo' | 'confirm'
@@ -70,6 +70,7 @@ export function SharedBookingWizard({
   const [stepIndex, setStepIndex] = useState(0)
   const [submitting, setSubmitting] = useState(false)
   const [success, setSuccess] = useState(false)
+  const [submitError, setSubmitError] = useState<string | null>(null)
 
   // Reset scroll position to top on step changes
   useEffect(() => {
@@ -127,8 +128,18 @@ export function SharedBookingWizard({
 
   const handleConfirm = async () => {
     setSubmitting(true)
+    setSubmitError(null)
 
-    const bookingId = `${type}-${Date.now()}`
+    if (!supabase) {
+      setSubmitError(
+        locale === 'ar'
+          ? 'خدمة الحجز غير متاحة حالياً. يرجى التواصل معنا مباشرة عبر واتساب.'
+          : 'Booking service is currently unavailable. Please contact us directly via WhatsApp.'
+      )
+      setSubmitting(false)
+      return
+    }
+
     const dbRow = {
       type,
       status: 'pending',
@@ -143,39 +154,20 @@ export function SharedBookingWizard({
       whatsapp_triggered: false,
     }
 
-    let savedToSupabase = false
-    if (supabase) {
-      try {
-        const { error } = await supabase.from('bookings').insert(dbRow)
-        if (error) throw error
-        savedToSupabase = true
-      } catch (err) {
-        console.error('Failed to save booking to Supabase, fallback to storage:', err)
-      }
-    }
-
-    if (!savedToSupabase) {
-      const newBooking: Booking = {
-        id: bookingId,
-        type,
-        status: 'pending',
-        city: state.city ?? '',
-        packageId: state.packageId ?? '',
-        location: state.locationId ?? '',
-        date: state.date ?? '',
-        customerInfo: state.customerInfo,
-        createdAt: new Date().toISOString(),
-      }
-      try {
-        const existing = storage.get<Booking[]>(STORAGE_KEYS.bookings) || []
-        existing.unshift(newBooking)
-        storage.set(STORAGE_KEYS.bookings, existing)
-      } catch {
-        // silently handle storage limits
-      }
-    }
+    const { error } = await supabase.from('bookings').insert(dbRow)
 
     setSubmitting(false)
+
+    if (error) {
+      console.error('[grooms-art] Booking insert failed:', error)
+      setSubmitError(
+        locale === 'ar'
+          ? 'حدث خطأ أثناء إرسال الحجز. يرجى المحاولة مرة أخرى أو التواصل معنا مباشرة.'
+          : 'Something went wrong while submitting your booking. Please try again or contact us directly.'
+      )
+      return
+    }
+
     setSuccess(true)
   }
 
@@ -310,6 +302,15 @@ export function SharedBookingWizard({
                   <SummaryRow label="Email" value={state.customerInfo.email} />
                 )}
               </div>
+
+              {submitError && (
+                <div className="flex items-start gap-3 bg-red-50 border border-red-200 rounded-xl px-5 py-4">
+                  <svg className="shrink-0 mt-0.5 text-red-500" width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                  </svg>
+                  <p className="font-sans text-sm text-red-700 leading-relaxed">{submitError}</p>
+                </div>
+              )}
 
               <button
                 type="button"
