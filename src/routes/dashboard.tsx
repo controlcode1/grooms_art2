@@ -7,11 +7,10 @@ import { useI18n } from '@/lib/i18n'
 import { storage, STORAGE_KEYS } from '@/lib/storage'
 import { supabase } from '@/lib/supabase/client'
 import {
-  getPortfolioImages,
-  savePortfolioImages,
-  getPortfolioCategories,
-  savePortfolioCategories,
   DEFAULT_CATEGORIES,
+  staticPortfolioImages,
+  getPublicUrl,
+  imageSrcSet,
   type PortfolioImage,
   type CategoryInfo,
 } from '@/lib/data/portfolio'
@@ -1638,9 +1637,7 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
                     ) : (
                       <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3">
                         {catImages.map((img) => {
-                          const src = img.id.startsWith('data:') || img.id.startsWith('blob:')
-                            ? img.id
-                            : `/images/portfolio/${img.id}-sm.webp`
+                          const src = imageSrcSet(img.id).sm
 
                           return (
                             <div key={img.id} className="relative aspect-square group rounded-lg overflow-hidden border border-charcoal/06">
