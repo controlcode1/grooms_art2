@@ -7,10 +7,11 @@ import { useI18n } from '@/lib/i18n'
 import { storage, STORAGE_KEYS } from '@/lib/storage'
 import { supabase } from '@/lib/supabase/client'
 import {
+  getPortfolioImages,
+  savePortfolioImages,
+  getPortfolioCategories,
+  savePortfolioCategories,
   DEFAULT_CATEGORIES,
-  staticPortfolioImages,
-  getPublicUrl,
-  imageSrcSet,
   type PortfolioImage,
   type CategoryInfo,
 } from '@/lib/data/portfolio'
@@ -639,7 +640,243 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
     return grid
   }, [availCursor, blockedDates, fullyBookedDates, today])
 
+  const reloadAvailability = useCallback(() => {
+    setBlockedDates(storage.get<string[]>(STORAGE_KEYS.blockedDates) || [])
+    setFullyBookedDates(storage.get<string[]>('ga_fully_booked_dates') || [])
+    const storedLocs = storage.get<Record<CityId, Location[]>>(STORAGE_KEYS.locations)
+    if (storedLocs) {
+      setLocationsMap(storedLocs)
+    } else {
+      setLocationsMap(DEFAULT_LOCATIONS)
+    }
+  }, [])
 
+  useEffect(() => {
+    reloadAvailability()
+  }, [reloadAvailability])
+
+  const blockDate = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!newBlockedDate) return
+    if (blockedDates.includes(newBlockedDate) || fullyBookedDates.includes(newBlockedDate)) {
+      alert('This date is already blocked or fully booked.')
+      return
+    }
+    const updated = [...blockedDates, newBlockedDate].sort()
+    storage.set(STORAGE_KEYS.blockedDates, updated)
+    setBlockedDates(updated)
+    setNewBlockedDate('')
+  }
+
+  const unblockDate = (dateStr: string) => {
+    const updated = blockedDates.filter((d) => d !== dateStr)
+    storage.set(STORAGE_KEYS.blockedDates, updated)
+    setBlockedDates(updated)
+    const updatedFully = fullyBookedDates.filter((d) => d !== dateStr)
+    storage.set('ga_fully_booked_dates', updatedFully)
+    setFullyBookedDates(updatedFully)
+  }
+
+  const toggleBlockDate = (dateStr: string) => {
+    let updated: string[]
+    if (blockedDates.includes(dateStr) || fullyBookedDates.includes(dateStr)) {
+      updated = blockedDates.filter((d) => d !== dateStr)
+      const updatedFully = fullyBookedDates.filter((d) => d !== dateStr)
+      storage.set('ga_fully_booked_dates', updatedFully)
+      setFullyBookedDates(updatedFully)
+    } else {
+      updated = [...blockedDates, dateStr].sort()
+    }
+    storage.set(STORAGE_KEYS.blockedDates, updated)
+    setBlockedDates(updated)
+  }
+
+  const toggleFullyBooked = (dateStr: string) => {
+    let updated: string[]
+    if (fullyBookedDates.includes(dateStr)) {
+      updated = fullyBookedDates.filter((d) => d !== dateStr)
+      // If removed from fully booked, make sure it is back in blockedDates
+      if (!blockedDates.includes(dateStr)) {
+        const newBlocked = [...blockedDates, dateStr].sort()
+        storage.set(STORAGE_KEYS.blockedDates, newBlocked)
+        setBlockedDates(newBlocked)
+      }
+    } else {
+      updated = [...fullyBookedDates, dateStr].sort()
+      // If added to fully booked, also make sure it is in blockedDates for easy logic
+      if (!blockedDates.includes(dateStr)) {
+        const newBlocked = [...blockedDates, dateStr].sort()
+        storage.set(STORAGE_KEYS.blockedDates, newBlocked)
+        setBlockedDates(newBlocked)
+      }
+    }
+    storage.set('ga_fully_booked_dates', updated)
+    setFullyBookedDates(updated)
+  }
+
+  const addLocation = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!newLocName.trim() || !newLocNameAr.trim()) return
+
+    const newLoc: Location = {
+      id: `loc-${Date.now()}`,
+      name: newLocName.trim(),
+      nameAr: newLocNameAr.trim(),
+      description: newLocDesc.trim(),
+      descriptionAr: newLocDescAr.trim(),
+    }
+
+    const currentCityLocs = locationsMap[selectedCity] || []
+    const updatedCityLocs = [...currentCityLocs, newLoc]
+    const updatedMap = { ...locationsMap, [selectedCity]: updatedCityLocs }
+
+    storage.set(STORAGE_KEYS.locations, updatedMap)
+    setLocationsMap(updatedMap)
+
+    // Reset fields
+    setNewLocName('')
+    setNewLocNameAr('')
+    setNewLocDesc('')
+    setNewLocDescAr('')
+  }
+
+  const deleteLocation = (locId: string) => {
+    if (!confirm('Are you sure you want to delete this location?')) return
+    const currentCityLocs = locationsMap[selectedCity] || []
+    const updatedCityLocs = currentCityLocs.filter((l) => l.id !== locId)
+    const updatedMap = { ...locationsMap, [selectedCity]: updatedCityLocs }
+
+    storage.set(STORAGE_KEYS.locations, updatedMap)
+    setLocationsMap(updatedMap)
+  }
+
+  // ─── State for Portfolio ───
+  const [categories, setCategories] = useState<CategoryInfo[]>([])
+  const [portfolioImgs, setPortfolioImgs] = useState<PortfolioImage[]>([])
+  const [newCatId, setNewCatId] = useState('')
+  const [newCatName, setNewCatName] = useState('')
+  const [newCatNameAr, setNewCatNameAr] = useState('')
+  const [renamingCatId, setRenamingCatId] = useState<string | null>(null)
+  const [renameNameEn, setRenameNameEn] = useState('')
+  const [renameNameAr, setRenameNameAr] = useState('')
+  const [uploading, setUploading] = useState(false)
+
+  const reloadPortfolio = useCallback(() => {
+    setCategories(getPortfolioCategories())
+    setPortfolioImgs(getPortfolioImages())
+  }, [])
+
+  useEffect(() => {
+    reloadPortfolio()
+  }, [reloadPortfolio])
+
+  const createCategory = (e: React.FormEvent) => {
+    e.preventDefault()
+    const id = newCatId.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-')
+    if (!id || !newCatName.trim()) return
+
+    if (categories.some((c) => c.id === id)) {
+      alert('Category ID already exists.')
+      return
+    }
+
+    const newCat: CategoryInfo = {
+      id,
+      name: newCatName.trim(),
+      nameAr: newCatNameAr.trim() || newCatName.trim(),
+    }
+
+    const updated = [...categories, newCat]
+    savePortfolioCategories(updated)
+    setCategories(updated)
+
+    setNewCatId('')
+    setNewCatName('')
+    setNewCatNameAr('')
+  }
+
+  const renameCategory = (id: string) => {
+    if (!renameNameEn.trim()) return
+    const updated = categories.map((c) => {
+      if (c.id === id) {
+        return {
+          ...c,
+          name: renameNameEn.trim(),
+          nameAr: renameNameAr.trim() || renameNameEn.trim(),
+        }
+      }
+      return c
+    })
+    savePortfolioCategories(updated)
+    setCategories(updated)
+    setRenamingCatId(null)
+  }
+
+  const deleteCategory = (catId: string) => {
+    // Check if there are any images in this category
+    const hasImages = portfolioImgs.some((img) => img.category === catId)
+    if (hasImages) {
+      alert('This category contains images. You cannot delete it until all its images are removed.')
+      return
+    }
+
+    if (!confirm('Are you sure you want to delete this category?')) return
+    const updated = categories.filter((c) => c.id !== catId)
+    savePortfolioCategories(updated)
+    setCategories(updated)
+  }
+
+  const deletePortfolioImage = (imgId: string) => {
+    if (!confirm('Are you sure you want to remove this image?')) return
+    const customImgs = storage.get<PortfolioImage[]>(STORAGE_KEYS.portfolioImages) || []
+    const updatedCustom = customImgs.filter((img) => img.id !== imgId)
+    savePortfolioImages(updatedCustom)
+    setPortfolioImgs(getPortfolioImages())
+  }
+
+  const handleImageUpload = async (catId: string, files: FileList | null) => {
+    if (!files || files.length === 0) return
+    setUploading(true)
+    try {
+      const customImgs = storage.get<PortfolioImage[]>(STORAGE_KEYS.portfolioImages) || []
+      const newItems: PortfolioImage[] = []
+
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i]
+        const dataUrl = await optimizeToWebP(file)
+        const id = dataUrl
+        const title = file.name.replace(/\.[^/.]+$/, '') // file name without ext
+
+        const newItem: PortfolioImage = {
+          id,
+          slug: title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''),
+          title,
+          alt: `${title} - portfolio upload`,
+          category: catId,
+          partOfFullDay: false,
+          orientation: 'landscape',
+          exif: {
+            camera: 'Unknown',
+            lens: 'Unknown',
+            focalLength: '—',
+            aperture: '—',
+            shutter: '—',
+            iso: '—',
+          },
+        }
+        newItems.push(newItem)
+      }
+
+      const updated = [...newItems, ...customImgs]
+      savePortfolioImages(updated)
+      setPortfolioImgs(getPortfolioImages())
+    } catch (err) {
+      console.error(err)
+      alert('Failed to optimize or upload images.')
+    } finally {
+      setUploading(false)
+    }
+  }
 
   // Stats Calculations
   const totalBaghdad = bookings.filter((b) => b.city === 'baghdad').length
@@ -672,83 +909,6 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
             >
               {locale === 'en' ? 'AR' : 'EN'}
             </button>
-
-            {/* Notification Bell */}
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowNotifications(!showNotifications)
-                  if (!showNotifications) {
-                    markNotificationsAsRead()
-                  }
-                }}
-                className="relative p-1.5 rounded-full text-charcoal/60 hover:bg-forest/05 hover:text-forest transition-all flex items-center justify-center"
-                aria-label="Notifications"
-              >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
-                  <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-                </svg>
-                {unreadCount > 0 && (
-                  <span className="absolute -top-0.5 -right-0.5 bg-red-600 text-white text-[9px] font-sans font-bold w-4 h-4 rounded-full flex items-center justify-center border border-white">
-                    {unreadCount}
-                  </span>
-                )}
-              </button>
-              
-              {/* Notification Dropdown Drawer */}
-              <AnimatePresence>
-                {showNotifications && (
-                  <>
-                    <div className="fixed inset-0 z-40" onClick={() => setShowNotifications(false)} />
-                    <motion.div
-                      initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                      animate={{ opacity: 1, y: 0, scale: 1 }}
-                      exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                      className="absolute right-0 mt-3 w-80 bg-white border border-charcoal/15 rounded-2xl shadow-xl z-50 overflow-hidden text-left"
-                    >
-                      <div className="px-4 py-3 bg-linen/30 border-b border-charcoal/10 flex items-center justify-between">
-                        <span className="font-serif text-sm font-semibold text-charcoal">
-                          {locale === 'ar' ? 'الإشعارات الجديدة' : 'Recent Bookings'}
-                        </span>
-                        {unreadCount > 0 && (
-                          <span className="font-sans text-[10px] bg-forest/10 text-forest px-2 py-0.5 rounded-full font-medium">
-                            {unreadCount} {locale === 'ar' ? 'جديد' : 'new'}
-                          </span>
-                        )}
-                      </div>
-                      <div className="max-h-64 overflow-y-auto divide-y divide-charcoal/05">
-                        {notifications.length === 0 ? (
-                          <div className="p-6 text-center font-sans text-xs text-charcoal/40">
-                            {locale === 'ar' ? 'لا توجد إشعارات جديدة.' : 'No new notifications.'}
-                          </div>
-                        ) : (
-                          notifications.map((n) => (
-                            <div 
-                              key={n.id} 
-                              className={clsx(
-                                "px-4 py-3 font-sans text-xs transition-colors hover:bg-linen/20",
-                                !n.is_read && "bg-forest/[0.02] font-medium"
-                              )}
-                            >
-                              <p className="text-charcoal/90 mb-1 leading-normal">{n.message}</p>
-                              <span className="text-[10px] text-charcoal/40">
-                                {new Date(n.created_at).toLocaleDateString(locale === 'ar' ? 'ar-EG' : 'en-US', {
-                                  hour: '2-digit',
-                                  minute: '2-digit'
-                                })}
-                              </span>
-                            </div>
-                          ))
-                        )}
-                      </div>
-                    </motion.div>
-                  </>
-                )}
-              </AnimatePresence>
-            </div>
-
             <Link
               to="/"
               className="font-sans text-xs tracking-[0.2em] uppercase text-charcoal/60 hover:text-charcoal transition-colors duration-300"
@@ -1120,13 +1280,7 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
                           <div className="flex items-center gap-3">
                             <button
                               type="button"
-                              onClick={() => {
-                                if (isFullyBooked) {
-                                  toggleFullyBooked(date)
-                                } else {
-                                  setPendingFullyBookedDate(date)
-                                }
-                              }}
+                              onClick={() => toggleFullyBooked(date)}
                               className={clsx(
                                 'font-sans text-[10px] tracking-wider uppercase px-2.5 py-1 rounded transition-colors font-medium',
                                 isFullyBooked
@@ -1401,7 +1555,9 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
                     ) : (
                       <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3">
                         {catImages.map((img) => {
-                          const src = imageSrcSet(img.id).sm
+                          const src = img.id.startsWith('data:') || img.id.startsWith('blob:')
+                            ? img.id
+                            : `/images/portfolio/${img.id}-sm.webp`
 
                           return (
                             <div key={img.id} className="relative aspect-square group rounded-lg overflow-hidden border border-charcoal/06">
@@ -1431,105 +1587,6 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
           </div>
         )}
       </main>
-
-      {/* Fully Booked Confirmation Dialog */}
-      <AnimatePresence>
-        {pendingFullyBookedDate && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center px-4">
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setPendingFullyBookedDate(null)}
-              className="absolute inset-0 bg-charcoal/40 backdrop-blur-sm"
-            />
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 10 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 10 }}
-              className="bg-white border border-charcoal/10 rounded-2xl p-6 max-w-sm w-full shadow-2xl relative z-50 text-center space-y-5"
-            >
-              <div className="w-12 h-12 rounded-full bg-red-500/10 text-red-600 flex items-center justify-center mx-auto">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-                  <line x1="12" y1="9" x2="12" y2="13" />
-                  <line x1="12" y1="17" x2="12.01" y2="17" />
-                </svg>
-              </div>
-              <div className="space-y-2">
-                <h3 className="font-serif text-lg text-charcoal">
-                  {locale === 'ar' ? 'هل أنت متأكد من قفل اليوم؟' : 'Confirm Fully Booked Day'}
-                </h3>
-                <p className="font-sans text-xs text-charcoal/60 leading-relaxed">
-                  {locale === 'ar'
-                    ? `هل أنت متأكد أنك تريد تمييز يوم ${pendingFullyBookedDate} كـ "ممتلئ بالكامل"؟ سيتم قفله للزبائن في قائمة الحجز.`
-                    : `Are you sure you want to mark ${pendingFullyBookedDate} as Fully Booked? This will block clients from selecting it.`}
-                </p>
-              </div>
-              <div className="flex gap-3 justify-center pt-2">
-                <button
-                  type="button"
-                  onClick={() => setPendingFullyBookedDate(null)}
-                  className="font-sans text-xs tracking-wider uppercase bg-linen border border-charcoal/10 text-charcoal px-4 py-2.5 rounded-lg hover:bg-linen/85 transition-all w-full"
-                >
-                  {locale === 'ar' ? 'إلغاء' : 'Cancel'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const dateToToggle = pendingFullyBookedDate
-                    setPendingFullyBookedDate(null)
-                    toggleFullyBooked(dateToToggle)
-                  }}
-                  className="font-sans text-xs tracking-wider uppercase bg-red-600 text-white px-4 py-2.5 rounded-lg hover:bg-red-700 transition-all w-full font-medium"
-                >
-                  {locale === 'ar' ? 'تأكيد' : 'Confirm'}
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* Toast Notifications Overlay Container */}
-      <div className="fixed bottom-6 right-6 z-[100] flex flex-col gap-3">
-        <AnimatePresence>
-          {toasts.map((toast) => (
-            <motion.div
-              key={toast.id}
-              initial={{ opacity: 0, y: 20, scale: 0.95 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95, transition: { duration: 0.2 } }}
-              className={clsx(
-                "px-5 py-3.5 rounded-xl shadow-lg border text-sm font-sans flex items-center gap-3 backdrop-blur-md min-w-[280px] max-w-sm justify-between",
-                toast.type === 'error'
-                  ? "bg-red-50/95 border-red-200 text-red-800"
-                  : "bg-white/95 border-charcoal/10 text-forest font-medium"
-              )}
-            >
-              <div className="flex items-center gap-2.5">
-                {toast.type === 'error' ? (
-                  <svg className="text-red-500 shrink-0" width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                  </svg>
-                ) : (
-                  <svg className="text-forest shrink-0" width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                  </svg>
-                )}
-                <span>{toast.message}</span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setToasts((prev) => prev.filter((t) => t.id !== toast.id))}
-                className="text-charcoal/30 hover:text-charcoal/60 transition-colors"
-              >
-                ✕
-              </button>
-            </motion.div>
-          ))}
-        </AnimatePresence>
-      </div>
     </div>
   )
 }

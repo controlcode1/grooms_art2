@@ -8,11 +8,15 @@ interface LocationStepProps {
   city: string | null
   selected: string | null
   onSelect: (locationId: string) => void
-  locations: Location[]
 }
 
-export function LocationStep({ city, selected, onSelect, locations }: LocationStepProps) {
+export function LocationStep({ city, selected, onSelect }: LocationStepProps) {
   const { t, locale } = useI18n()
+
+  const cityId = (city === 'erbil' ? 'erbil' : 'baghdad') as 'baghdad' | 'erbil'
+  // Load custom locations from storage if present (dashboard-managed)
+  const customLocationsMap = storage.get<Record<string, Location[]>>(STORAGE_KEYS.locations) || {}
+  const locations = getLocationsForCity(cityId, customLocationsMap[cityId])
 
   return (
     <div className="flex flex-col items-center">

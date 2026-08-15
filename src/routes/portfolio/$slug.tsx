@@ -1,89 +1,13 @@
 import { createFileRoute, Link, notFound } from '@tanstack/react-router'
 import { Section } from '@/features/shared/components/Section'
-import { 
-  imageSrcSet, 
-  staticPortfolioImages, 
-  getPublicUrl, 
-  type PortfolioImage 
-} from '@/lib/data/portfolio'
+import { imageSrcSet, getPortfolioImages } from '@/lib/data/portfolio'
 import { useI18n } from '@/lib/i18n'
-import { supabase } from '@/lib/supabase/client'
 
 export const Route = createFileRoute('/portfolio/$slug')({
-  loader: async ({ params }) => {
-    let image = staticPortfolioImages.find((img) => img.slug === params.slug)
-
-    if (!image && supabase) {
-      const { data, error } = await supabase
-        .from('portfolio_images')
-        .select('*')
-        .eq('slug', params.slug)
-        .maybeSingle()
-      
-      if (!error && data) {
-        image = {
-          id: getPublicUrl(data.storage_path),
-          dbId: data.id,
-          slug: data.slug,
-          title: data.title,
-          alt: data.alt || '',
-          category: data.category,
-          partOfFullDay: data.part_of_full_day,
-          orientation: data.orientation || 'landscape',
-          storagePath: data.storage_path,
-          exif: {
-            camera: 'Sony A7 IV',
-            lens: '35mm f/1.4 GM',
-            focalLength: '35mm',
-            aperture: 'f/2.2',
-            shutter: '1/500s',
-            iso: 'ISO 100',
-          },
-        }
-      }
-    }
-
+  loader: ({ params }) => {
+    const image = getPortfolioImages().find((img) => img.slug === params.slug)
     if (!image) throw notFound()
-
-    // Fetch related images from Supabase
-    let related: PortfolioImage[] = []
-    if (supabase) {
-      const { data: dbRelated } = await supabase
-        .from('portfolio_images')
-        .select('*')
-        .eq('category', image.category)
-        .neq('slug', params.slug)
-        .limit(3)
-      
-      if (dbRelated) {
-        related = dbRelated.map((row: any) => ({
-          id: getPublicUrl(row.storage_path),
-          dbId: row.id,
-          slug: row.slug,
-          title: row.title,
-          alt: row.alt || '',
-          category: row.category,
-          partOfFullDay: row.part_of_full_day,
-          orientation: row.orientation || 'landscape',
-          storagePath: row.storage_path,
-          exif: {
-            camera: 'Sony A7 IV',
-            lens: '35mm f/1.4 GM',
-            focalLength: '35mm',
-            aperture: 'f/2.2',
-            shutter: '1/500s',
-            iso: 'ISO 100',
-          },
-        }))
-      }
-    }
-
-    const staticRelated = staticPortfolioImages.filter(
-      (img) => img.category === image.category && img.slug !== params.slug
-    )
-    const combinedRelated = [...related, ...staticRelated].slice(0, 3)
-
-    return { image, related: combinedRelated }
+    return { image }
   },
   head: ({ loaderData }) => ({
     meta: loaderData
@@ -106,9 +30,13 @@ export const Route = createFileRoute('/portfolio/$slug')({
 })
 
 function PortfolioDetail() {
-  const { image, related } = Route.useLoaderData()
+  const { image } = Route.useLoaderData()
   const { t } = useI18n()
   const src = imageSrcSet(image.id)
+
+  const related = getPortfolioImages()
+    .filter((img) => img.category === image.category && img.id !== image.id)
+    .slice(0, 3)
 
   return (
     <Section className="pt-32 pb-24 md:pt-40 md:pb-32">
