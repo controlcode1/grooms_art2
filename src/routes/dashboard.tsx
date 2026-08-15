@@ -4,11 +4,14 @@ import { motion, AnimatePresence } from 'motion/react'
 import { clsx } from 'clsx'
 import { PalmEmblem } from '@/features/shared/components/PalmEmblem'
 import { useI18n } from '@/lib/i18n'
+import { storage, STORAGE_KEYS } from '@/lib/storage'
 import { supabase } from '@/lib/supabase/client'
 import {
+  getPortfolioImages,
+  savePortfolioImages,
+  getPortfolioCategories,
+  savePortfolioCategories,
   DEFAULT_CATEGORIES,
-  staticPortfolioImages,
-  getPublicUrl,
   type PortfolioImage,
   type CategoryInfo,
 } from '@/lib/data/portfolio'
@@ -462,152 +465,111 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
   const d = locale === 'ar' ? DASHBOARD_T.ar : DASHBOARD_T.en
   const [activeTab, setActiveTab] = useState<DashboardTab>('bookings')
 
-  // ─── Toast Notifications ───────────────────────────────────────────────────
-  const [toasts, setToasts] = useState<{ id: number; message: string; type: 'success' | 'error' }[]>([])
-  const showToast = useCallback((message: string, type: 'success' | 'error' = 'success') => {
-    const id = Date.now()
-    setToasts((prev) => [...prev, { id, message, type }])
-    setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 3500)
-  }, [])
-
-  // ─── Notifications State ────────────────────────────────────────────────────
-  const [notifications, setNotifications] = useState<{ id: string; message: string; is_read: boolean; created_at: string }[]>([])
-  const [showNotifications, setShowNotifications] = useState(false)
-  const unreadCount = useMemo(() => notifications.filter((n) => !n.is_read).length, [notifications])
-
-  const reloadNotifications = useCallback(async () => {
-    if (!supabase) return
-    const { data, error } = await supabase
-      .from('notifications')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(50)
-    if (!error && data) setNotifications(data)
-  }, [])
-
-  const markNotificationsAsRead = async () => {
-    if (!supabase) return
-    const unreadIds = notifications.filter((n) => !n.is_read).map((n) => n.id)
-    if (unreadIds.length === 0) return
-    const { error } = await supabase
-      .from('notifications')
-      .update({ is_read: true })
-      .in('id', unreadIds)
-    if (!error) {
-      setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })))
-    }
-  }
-
   // ─── State for Bookings ───
   const [bookings, setBookings] = useState<Booking[]>([])
   const [bookingFilter, setBookingFilter] = useState<'all' | 'pending' | 'confirmed' | 'approved'>('all')
 
   const reloadBookings = useCallback(async () => {
-    if (!supabase) {
-      showToast(locale === 'ar' ? 'Supabase غير متصل.' : 'Supabase not configured.', 'error')
-      return
-    }
-    try {
-      const { data, error } = await supabase
-        .from('bookings')
-        .select('*')
-        .order('created_at', { ascending: false })
-      if (error) throw error
-      if (data) {
-        const mapped: Booking[] = data.map((row: any) => ({
-          id: row.id,
-          type: row.type as BookingType,
-          status: row.status as BookingStatus,
-          city: row.city,
-          packageId: row.package_id,
-          location: row.location_id || row.location || '',
-          date: row.date,
-          customerInfo: {
-            fullName: row.full_name,
-            phone: row.phone,
-            email: row.email || '',
-            notes: row.notes || '',
-          },
-          createdAt: row.created_at,
-          whatsappTriggered: row.whatsapp_triggered,
-        }))
-        setBookings(mapped)
+    if (supabase) {
+      try {
+        const { data, error } = await supabase
+          .from('bookings')
+          .select('*')
+          .order('created_at', { ascending: false })
+        if (error) throw error
+        if (data) {
+          const mapped: Booking[] = data.map((row: any) => ({
+            id: row.id,
+            type: row.type as BookingType,
+            status: row.status as BookingStatus,
+            city: row.city,
+            packageId: row.package_id,
+            location: row.location_id || row.location || '',
+            date: row.date,
+            customerInfo: {
+              fullName: row.full_name,
+              phone: row.phone,
+              email: row.email || '',
+              notes: row.notes || '',
+            },
+            createdAt: row.created_at,
+            whatsappTriggered: row.whatsapp_triggered,
+          }))
+          setBookings(mapped)
+          return
+        }
+      } catch (err) {
+        console.error('Failed to load bookings from Supabase, trying fallback:', err)
       }
-    } catch (err) {
-      console.error('Failed to load bookings:', err)
-      showToast(locale === 'ar' ? 'فشل تحميل الحجوزات.' : 'Failed to load bookings.', 'error')
     }
-  }, [locale, showToast])
+    // Fallback to localStorage only if Supabase call failed or isn't configured
+    setBookings(storage.get<Booking[]>(STORAGE_KEYS.bookings) || [])
+  }, [])
 
   useEffect(() => {
-    if (!supabase) return
     reloadBookings()
-    reloadNotifications()
-
-    const bookingsChannel = supabase
-      .channel('db_bookings_rt')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings' }, () => reloadBookings())
-      .subscribe()
-
-    const notifChannel = supabase
-      .channel('db_notifications_rt')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' }, (payload) => {
-        reloadNotifications()
-        showToast(payload.new.message ?? (locale === 'ar' ? 'حجز جديد!' : 'New booking!'), 'success')
-      })
-      .subscribe()
-
-    return () => {
-      supabase.removeChannel(bookingsChannel)
-      supabase.removeChannel(notifChannel)
-    }
-  }, [reloadBookings, reloadNotifications, showToast, locale])
+  }, [reloadBookings])
 
   const updateBookingStatus = async (id: string, newStatus: BookingStatus) => {
-    if (!supabase) return
+    let updatedDb = false
     const currentBooking = bookings.find((b) => b.id === id)
     if (!currentBooking) return
 
-    try {
-      const { error } = await supabase
-        .from('bookings')
-        .update({
-          status: newStatus,
-          whatsapp_triggered: newStatus === 'confirmed' ? true : currentBooking.whatsappTriggered
-        })
-        .eq('id', id)
-      if (error) throw error
-
-      setBookings((prev) => prev.map((b) => {
-        if (b.id === id) {
-          const item = { ...b, status: newStatus }
-          if (newStatus === 'confirmed') {
-            triggerWhatsApp(item)
-            item.whatsappTriggered = true
-          }
-          return item
-        }
-        return b
-      }))
-      showToast(locale === 'ar' ? 'تم تحديث حالة الحجز.' : 'Booking status updated.', 'success')
-    } catch (err) {
-      console.error(err)
-      showToast(locale === 'ar' ? 'فشل تحديث حالة الحجز.' : 'Failed to update booking status.', 'error')
+    if (supabase) {
+      try {
+        const { error } = await supabase
+          .from('bookings')
+          .update({
+            status: newStatus,
+            whatsapp_triggered: newStatus === 'confirmed' ? true : currentBooking.whatsappTriggered
+          })
+          .eq('id', id)
+        if (error) throw error
+        updatedDb = true
+      } catch (err) {
+        console.error('Failed to update booking status in Supabase:', err)
+      }
     }
+
+    const updated = bookings.map((b) => {
+      if (b.id === id) {
+        const item = { ...b, status: newStatus }
+        if (newStatus === 'confirmed') {
+          triggerWhatsApp(item)
+          item.whatsappTriggered = true
+        }
+        return item
+      }
+      return b
+    })
+
+    if (!updatedDb) {
+      storage.set(STORAGE_KEYS.bookings, updated)
+    }
+    setBookings(updated)
   }
 
   const deleteBooking = async (id: string) => {
     if (!confirm('Are you sure you want to delete this booking record?')) return
-    if (!supabase) return
-    try {
-      const { error } = await supabase.from('bookings').delete().eq('id', id)
-      if (error) throw error
-      setBookings((prev) => prev.filter((b) => b.id !== id))
-      showToast(locale === 'ar' ? 'تم حذف الحجز.' : 'Booking deleted.', 'success')
-    } catch (err) {
-      console.error(err)
-      showToast(locale === 'ar' ? 'فشل حذف الحجز.' : 'Failed to delete booking.', 'error')
+    let deletedDb = false
+    if (supabase) {
+      try {
+        const { error } = await supabase
+          .from('bookings')
+          .delete()
+          .eq('id', id)
+        if (error) throw error
+        deletedDb = true
+      } catch (err) {
+        console.error('Failed to delete booking from Supabase:', err)
+      }
     }
+
+    const updated = bookings.filter((b) => b.id !== id)
+    if (!deletedDb) {
+      storage.set(STORAGE_KEYS.bookings, updated)
+    }
+    setBookings(updated)
   }
 
   const handleWelcomeSend = (b: Booking) => {
@@ -623,7 +585,6 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
   // ─── State for Availability ───
   const [blockedDates, setBlockedDates] = useState<string[]>([])
   const [fullyBookedDates, setFullyBookedDates] = useState<string[]>([])
-  const [pendingFullyBookedDate, setPendingFullyBookedDate] = useState<string | null>(null)
   const [newBlockedDate, setNewBlockedDate] = useState('')
   const [selectedCity, setSelectedCity] = useState<CityId>('baghdad')
   const [locationsMap, setLocationsMap] = useState<Record<CityId, Location[]>>(DEFAULT_LOCATIONS)
@@ -648,15 +609,19 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
     const month = String(date.getMonth() + 1).padStart(2, '0')
     const day = String(date.getDate()).padStart(2, '0')
     return `${year}-${month}-${day}`
-  }
+  };
 
   const availCells = useMemo(() => {
     const firstDay = new Date(availCursor.year, availCursor.month, 1).getDay()
     const daysInMonth = new Date(availCursor.year, availCursor.month + 1, 0).getDate()
     const grid: { iso: string | null; day: number | null; isToday: boolean; isBlocked: boolean; isPast: boolean }[] = []
+
+    // Leading empty cells
     for (let i = 0; i < firstDay; i++) {
       grid.push({ iso: null, day: null, isToday: false, isBlocked: false, isPast: false })
     }
+
+    // Day cells
     const todayIso = toLocalISODate(today)
     for (let d = 1; d <= daysInMonth; d++) {
       const date = new Date(availCursor.year, availCursor.month, d)
@@ -666,168 +631,127 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
       const isPast = iso < todayIso
       grid.push({ iso, day: d, isToday, isBlocked, isPast })
     }
+
+    // Trailing cells
     while (grid.length % 7 !== 0) {
       grid.push({ iso: null, day: null, isToday: false, isBlocked: false, isPast: false })
     }
+
     return grid
   }, [availCursor, blockedDates, fullyBookedDates, today])
 
-  const reloadAvailability = useCallback(async () => {
-    if (!supabase) return
-    const { data: dates, error: datesErr } = await supabase.from('blocked_dates').select('*')
-    if (!datesErr && dates) {
-      setBlockedDates(dates.filter((d: any) => d.type === 'blocked').map((d: any) => d.date))
-      setFullyBookedDates(dates.filter((d: any) => d.type === 'fully_booked').map((d: any) => d.date))
-    }
-    const { data: locs, error: locsErr } = await supabase.from('locations').select('*')
-    if (!locsErr && locs) {
-      const map: Record<CityId, Location[]> = { baghdad: [], erbil: [] }
-      locs.forEach((l: any) => {
-        if (map[l.city as CityId]) {
-          map[l.city as CityId].push({
-            id: l.id, city: l.city, name: l.name, nameAr: l.name_ar,
-            description: l.description || '', descriptionAr: l.description_ar || '',
-          })
-        }
-      })
-      setLocationsMap(map)
+  const reloadAvailability = useCallback(() => {
+    setBlockedDates(storage.get<string[]>(STORAGE_KEYS.blockedDates) || [])
+    setFullyBookedDates(storage.get<string[]>('ga_fully_booked_dates') || [])
+    const storedLocs = storage.get<Record<CityId, Location[]>>(STORAGE_KEYS.locations)
+    if (storedLocs) {
+      setLocationsMap(storedLocs)
     } else {
       setLocationsMap(DEFAULT_LOCATIONS)
     }
   }, [])
 
   useEffect(() => {
-    if (!supabase) return
     reloadAvailability()
-
-    const blockedChannel = supabase
-      .channel('db_blocked_dates_rt')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'blocked_dates' }, () => reloadAvailability())
-      .subscribe()
-
-    const locsChannel = supabase
-      .channel('db_locations_rt')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'locations' }, () => reloadAvailability())
-      .subscribe()
-
-    return () => {
-      supabase.removeChannel(blockedChannel)
-      supabase.removeChannel(locsChannel)
-    }
   }, [reloadAvailability])
 
-  const blockDate = async (e: React.FormEvent) => {
+  const blockDate = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!newBlockedDate || !supabase) return
+    if (!newBlockedDate) return
     if (blockedDates.includes(newBlockedDate) || fullyBookedDates.includes(newBlockedDate)) {
-      showToast(locale === 'ar' ? 'هذا التاريخ محظور بالفعل.' : 'Date already blocked.', 'error')
+      alert('This date is already blocked or fully booked.')
       return
     }
-    const { error } = await supabase.from('blocked_dates').insert({ date: newBlockedDate, type: 'blocked' })
-    if (error) {
-      showToast(locale === 'ar' ? 'فشل حظر التاريخ.' : 'Failed to block date.', 'error')
-    } else {
-      setBlockedDates((prev) => [...prev, newBlockedDate].sort())
-      setNewBlockedDate('')
-      showToast(locale === 'ar' ? 'تم حظر التاريخ.' : 'Date blocked.', 'success')
-    }
+    const updated = [...blockedDates, newBlockedDate].sort()
+    storage.set(STORAGE_KEYS.blockedDates, updated)
+    setBlockedDates(updated)
+    setNewBlockedDate('')
   }
 
-  const unblockDate = async (dateStr: string) => {
-    if (!supabase) return
-    const { error } = await supabase.from('blocked_dates').delete().eq('date', dateStr)
-    if (error) {
-      showToast(locale === 'ar' ? 'فشل إلغاء الحظر.' : 'Failed to unblock date.', 'error')
-    } else {
-      setBlockedDates((prev) => prev.filter((d) => d !== dateStr))
-      setFullyBookedDates((prev) => prev.filter((d) => d !== dateStr))
-      showToast(locale === 'ar' ? 'تم فتح التاريخ.' : 'Date unblocked.', 'success')
-    }
+  const unblockDate = (dateStr: string) => {
+    const updated = blockedDates.filter((d) => d !== dateStr)
+    storage.set(STORAGE_KEYS.blockedDates, updated)
+    setBlockedDates(updated)
+    const updatedFully = fullyBookedDates.filter((d) => d !== dateStr)
+    storage.set('ga_fully_booked_dates', updatedFully)
+    setFullyBookedDates(updatedFully)
   }
 
-  const toggleBlockDate = async (dateStr: string) => {
-    if (!supabase) return
-    const isBlocked = blockedDates.includes(dateStr) || fullyBookedDates.includes(dateStr)
-    if (isBlocked) {
-      const { error } = await supabase.from('blocked_dates').delete().eq('date', dateStr)
-      if (error) {
-        showToast(locale === 'ar' ? 'فشل تعديل حالة اليوم.' : 'Failed to update date.', 'error')
-      } else {
-        setBlockedDates((prev) => prev.filter((d) => d !== dateStr))
-        setFullyBookedDates((prev) => prev.filter((d) => d !== dateStr))
-        showToast(locale === 'ar' ? 'تم فتح اليوم.' : 'Date opened.', 'success')
-      }
+  const toggleBlockDate = (dateStr: string) => {
+    let updated: string[]
+    if (blockedDates.includes(dateStr) || fullyBookedDates.includes(dateStr)) {
+      updated = blockedDates.filter((d) => d !== dateStr)
+      const updatedFully = fullyBookedDates.filter((d) => d !== dateStr)
+      storage.set('ga_fully_booked_dates', updatedFully)
+      setFullyBookedDates(updatedFully)
     } else {
-      const { error } = await supabase.from('blocked_dates').insert({ date: dateStr, type: 'blocked' })
-      if (error) {
-        showToast(locale === 'ar' ? 'فشل حظر اليوم.' : 'Failed to block date.', 'error')
-      } else {
-        setBlockedDates((prev) => [...prev, dateStr].sort())
-        showToast(locale === 'ar' ? 'تم حظر اليوم.' : 'Date blocked.', 'success')
-      }
+      updated = [...blockedDates, dateStr].sort()
     }
-  }
-
-  const confirmFullyBooked = async (dateStr: string) => {
-    if (!supabase) return
-    const isFullyBooked = fullyBookedDates.includes(dateStr)
-    const { error } = await supabase.from('blocked_dates').upsert({ date: dateStr, type: isFullyBooked ? 'blocked' : 'fully_booked' })
-    if (error) {
-      showToast(locale === 'ar' ? 'فشل تحديث حالة اليوم.' : 'Failed to update date.', 'error')
-    } else {
-      if (isFullyBooked) {
-        setFullyBookedDates((prev) => prev.filter((d) => d !== dateStr))
-        setBlockedDates((prev) => [...prev, dateStr].sort())
-        showToast(locale === 'ar' ? 'تم إعادة تصنيف اليوم كمحظور.' : 'Day changed to Blocked.', 'success')
-      } else {
-        setBlockedDates((prev) => prev.filter((d) => d !== dateStr))
-        setFullyBookedDates((prev) => [...prev, dateStr].sort())
-        showToast(locale === 'ar' ? 'تم قفل اليوم بالكامل.' : 'Day marked as Fully Booked.', 'success')
-      }
-    }
-    setPendingFullyBookedDate(null)
+    storage.set(STORAGE_KEYS.blockedDates, updated)
+    setBlockedDates(updated)
   }
 
   const toggleFullyBooked = (dateStr: string) => {
-    const isCurrentlyFull = fullyBookedDates.includes(dateStr)
-    if (!isCurrentlyFull) {
-      // Require confirmation before marking as fully booked
-      setPendingFullyBookedDate(dateStr)
+    let updated: string[]
+    if (fullyBookedDates.includes(dateStr)) {
+      updated = fullyBookedDates.filter((d) => d !== dateStr)
+      // If removed from fully booked, make sure it is back in blockedDates
+      if (!blockedDates.includes(dateStr)) {
+        const newBlocked = [...blockedDates, dateStr].sort()
+        storage.set(STORAGE_KEYS.blockedDates, newBlocked)
+        setBlockedDates(newBlocked)
+      }
     } else {
-      confirmFullyBooked(dateStr)
+      updated = [...fullyBookedDates, dateStr].sort()
+      // If added to fully booked, also make sure it is in blockedDates for easy logic
+      if (!blockedDates.includes(dateStr)) {
+        const newBlocked = [...blockedDates, dateStr].sort()
+        storage.set(STORAGE_KEYS.blockedDates, newBlocked)
+        setBlockedDates(newBlocked)
+      }
     }
+    storage.set('ga_fully_booked_dates', updated)
+    setFullyBookedDates(updated)
   }
 
-  const addLocation = async (e: React.FormEvent) => {
+  const addLocation = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!newLocName.trim() || !newLocNameAr.trim() || !supabase) return
-    const { data, error } = await supabase
-      .from('locations')
-      .insert({ city: selectedCity, name: newLocName.trim(), name_ar: newLocNameAr.trim(), description: newLocDesc.trim(), description_ar: newLocDescAr.trim() })
-      .select()
-    if (error) {
-      showToast(locale === 'ar' ? 'فشل إضافة الموقع.' : 'Failed to add location.', 'error')
-    } else if (data && data[0]) {
-      const added: Location = { id: data[0].id, city: data[0].city, name: data[0].name, nameAr: data[0].name_ar, description: data[0].description || '', descriptionAr: data[0].description_ar || '' }
-      setLocationsMap((prev) => ({ ...prev, [selectedCity]: [...(prev[selectedCity] || []), added] }))
-      setNewLocName(''); setNewLocNameAr(''); setNewLocDesc(''); setNewLocDescAr('')
-      showToast(locale === 'ar' ? 'تم إضافة الموقع.' : 'Location added.', 'success')
+    if (!newLocName.trim() || !newLocNameAr.trim()) return
+
+    const newLoc: Location = {
+      id: `loc-${Date.now()}`,
+      name: newLocName.trim(),
+      nameAr: newLocNameAr.trim(),
+      description: newLocDesc.trim(),
+      descriptionAr: newLocDescAr.trim(),
     }
+
+    const currentCityLocs = locationsMap[selectedCity] || []
+    const updatedCityLocs = [...currentCityLocs, newLoc]
+    const updatedMap = { ...locationsMap, [selectedCity]: updatedCityLocs }
+
+    storage.set(STORAGE_KEYS.locations, updatedMap)
+    setLocationsMap(updatedMap)
+
+    // Reset fields
+    setNewLocName('')
+    setNewLocNameAr('')
+    setNewLocDesc('')
+    setNewLocDescAr('')
   }
 
-  const deleteLocation = async (locId: string) => {
-    if (!confirm('Are you sure you want to delete this location?') || !supabase) return
-    const { error } = await supabase.from('locations').delete().eq('id', locId)
-    if (error) {
-      showToast(locale === 'ar' ? 'فشل حذف الموقع.' : 'Failed to delete location.', 'error')
-    } else {
-      setLocationsMap((prev) => ({ ...prev, [selectedCity]: (prev[selectedCity] || []).filter((l) => l.id !== locId) }))
-      showToast(locale === 'ar' ? 'تم حذف الموقع.' : 'Location deleted.', 'success')
-    }
+  const deleteLocation = (locId: string) => {
+    if (!confirm('Are you sure you want to delete this location?')) return
+    const currentCityLocs = locationsMap[selectedCity] || []
+    const updatedCityLocs = currentCityLocs.filter((l) => l.id !== locId)
+    const updatedMap = { ...locationsMap, [selectedCity]: updatedCityLocs }
+
+    storage.set(STORAGE_KEYS.locations, updatedMap)
+    setLocationsMap(updatedMap)
   }
 
   // ─── State for Portfolio ───
-  const [categories, setCategories] = useState<CategoryInfo[]>([...DEFAULT_CATEGORIES])
+  const [categories, setCategories] = useState<CategoryInfo[]>([])
   const [portfolioImgs, setPortfolioImgs] = useState<PortfolioImage[]>([])
   const [newCatId, setNewCatId] = useState('')
   const [newCatName, setNewCatName] = useState('')
@@ -835,171 +759,122 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
   const [renamingCatId, setRenamingCatId] = useState<string | null>(null)
   const [renameNameEn, setRenameNameEn] = useState('')
   const [renameNameAr, setRenameNameAr] = useState('')
-  const [uploadProgress, setUploadProgress] = useState<{ current: number; total: number } | null>(null)
+  const [uploading, setUploading] = useState(false)
 
-  const reloadPortfolio = useCallback(async () => {
-    if (!supabase) return
-    try {
-      const { data: cats, error: catsErr } = await supabase.from('portfolio_categories').select('*').order('sort_order', { ascending: true })
-      let mergedCats = [...DEFAULT_CATEGORIES]
-      if (!catsErr && cats) {
-        cats.forEach((c: any) => {
-          if (!mergedCats.some((existing) => existing.id === c.id)) {
-            mergedCats.push({ id: c.id, name: c.name, nameAr: c.name_ar })
-          }
-        })
-      }
-      setCategories(mergedCats)
-
-      const { data: imgs, error: imgsErr } = await supabase.from('portfolio_images').select('*').order('created_at', { ascending: false })
-      if (!imgsErr && imgs) {
-        const mapped: PortfolioImage[] = imgs.map((row: any) => ({
-          id: getPublicUrl(row.storage_path),
-          dbId: row.id,
-          slug: row.slug,
-          title: row.title,
-          alt: row.alt || '',
-          category: row.category,
-          partOfFullDay: row.part_of_full_day,
-          orientation: row.orientation || 'landscape',
-          storagePath: row.storage_path,
-          exif: { camera: 'Sony A7 IV', lens: '35mm f/1.4 GM', focalLength: '35mm', aperture: 'f/2.2', shutter: '1/500s', iso: 'ISO 100' },
-        }))
-        setPortfolioImgs([...mapped, ...staticPortfolioImages])
-      } else {
-        setPortfolioImgs(staticPortfolioImages)
-      }
-    } catch (err) {
-      console.error('Failed to reload portfolio:', err)
-      showToast(locale === 'ar' ? 'فشل تحميل بيانات المعرض.' : 'Failed to load portfolio.', 'error')
-    }
-  }, [locale, showToast])
+  const reloadPortfolio = useCallback(() => {
+    setCategories(getPortfolioCategories())
+    setPortfolioImgs(getPortfolioImages())
+  }, [])
 
   useEffect(() => {
-    if (!supabase) return
     reloadPortfolio()
-
-    const catsChannel = supabase
-      .channel('db_portfolio_cats_rt')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'portfolio_categories' }, () => reloadPortfolio())
-      .subscribe()
-
-    const imgsChannel = supabase
-      .channel('db_portfolio_imgs_rt')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'portfolio_images' }, () => reloadPortfolio())
-      .subscribe()
-
-    return () => {
-      supabase.removeChannel(catsChannel)
-      supabase.removeChannel(imgsChannel)
-    }
   }, [reloadPortfolio])
 
-  useEffect(() => {
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (uploadProgress !== null) { e.preventDefault(); e.returnValue = '' }
-    }
-    window.addEventListener('beforeunload', handleBeforeUnload)
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
-  }, [uploadProgress])
-
-  const createCategory = async (e: React.FormEvent) => {
+  const createCategory = (e: React.FormEvent) => {
     e.preventDefault()
     const id = newCatId.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-')
-    if (!id || !newCatName.trim() || !supabase) return
+    if (!id || !newCatName.trim()) return
+
     if (categories.some((c) => c.id === id)) {
-      showToast(locale === 'ar' ? 'معرّف التصنيف موجود.' : 'Category ID already exists.', 'error')
+      alert('Category ID already exists.')
       return
     }
-    const { error } = await supabase.from('portfolio_categories').insert({ id, name: newCatName.trim(), name_ar: newCatNameAr.trim() || newCatName.trim() })
-    if (error) {
-      showToast(locale === 'ar' ? 'فشل إنشاء التصنيف.' : 'Failed to create category.', 'error')
-    } else {
-      setNewCatId(''); setNewCatName(''); setNewCatNameAr('')
-      showToast(locale === 'ar' ? 'تم إنشاء التصنيف.' : 'Category created.', 'success')
-      reloadPortfolio()
+
+    const newCat: CategoryInfo = {
+      id,
+      name: newCatName.trim(),
+      nameAr: newCatNameAr.trim() || newCatName.trim(),
     }
+
+    const updated = [...categories, newCat]
+    savePortfolioCategories(updated)
+    setCategories(updated)
+
+    setNewCatId('')
+    setNewCatName('')
+    setNewCatNameAr('')
   }
 
-  const renameCategory = async (id: string) => {
-    if (!renameNameEn.trim() || !supabase) return
-    const { error } = await supabase.from('portfolio_categories').update({ name: renameNameEn.trim(), name_ar: renameNameAr.trim() || renameNameEn.trim() }).eq('id', id)
-    if (error) {
-      showToast(locale === 'ar' ? 'فشل تعديل اسم التصنيف.' : 'Failed to rename category.', 'error')
-    } else {
-      setRenamingCatId(null)
-      showToast(locale === 'ar' ? 'تم تعديل التصنيف.' : 'Category renamed.', 'success')
-      reloadPortfolio()
-    }
+  const renameCategory = (id: string) => {
+    if (!renameNameEn.trim()) return
+    const updated = categories.map((c) => {
+      if (c.id === id) {
+        return {
+          ...c,
+          name: renameNameEn.trim(),
+          nameAr: renameNameAr.trim() || renameNameEn.trim(),
+        }
+      }
+      return c
+    })
+    savePortfolioCategories(updated)
+    setCategories(updated)
+    setRenamingCatId(null)
   }
 
-  const deleteCategory = async (catId: string) => {
+  const deleteCategory = (catId: string) => {
+    // Check if there are any images in this category
     const hasImages = portfolioImgs.some((img) => img.category === catId)
     if (hasImages) {
-      showToast(locale === 'ar' ? 'احذف صور التصنيف أولاً.' : 'Remove category images first.', 'error')
+      alert('This category contains images. You cannot delete it until all its images are removed.')
       return
     }
-    if (!confirm('Are you sure you want to delete this category?') || !supabase) return
-    const { error } = await supabase.from('portfolio_categories').delete().eq('id', catId)
-    if (error) {
-      showToast(locale === 'ar' ? 'فشل حذف التصنيف.' : 'Failed to delete category.', 'error')
-    } else {
-      showToast(locale === 'ar' ? 'تم حذف التصنيف.' : 'Category deleted.', 'success')
-      reloadPortfolio()
-    }
+
+    if (!confirm('Are you sure you want to delete this category?')) return
+    const updated = categories.filter((c) => c.id !== catId)
+    savePortfolioCategories(updated)
+    setCategories(updated)
   }
 
-  const deletePortfolioImage = async (imgId: string) => {
-    if (!confirm('Are you sure you want to remove this image?') || !supabase) return
-    const targetImg = portfolioImgs.find((img) => img.id === imgId)
-    if (!targetImg?.storagePath || !targetImg?.dbId) return
-    try {
-      const { error: storageErr } = await supabase.storage.from('portfolio').remove([targetImg.storagePath])
-      if (storageErr) throw storageErr
-      const { error: dbErr } = await supabase.from('portfolio_images').delete().eq('id', targetImg.dbId)
-      if (dbErr) throw dbErr
-      showToast(locale === 'ar' ? 'تم حذف الصورة.' : 'Image deleted.', 'success')
-      reloadPortfolio()
-    } catch (err) {
-      console.error(err)
-      showToast(locale === 'ar' ? 'فشل حذف الصورة.' : 'Failed to delete image.', 'error')
-    }
-  }
-
-  const dataURLtoBlob = (dataurl: string): Blob => {
-    const arr = dataurl.split(',')
-    const mime = arr[0].match(/:(.*?);/)?.[1] || 'image/webp'
-    const bstr = atob(arr[1])
-    let n = bstr.length
-    const u8arr = new Uint8Array(n)
-    while (n--) { u8arr[n] = bstr.charCodeAt(n) }
-    return new Blob([u8arr], { type: mime })
+  const deletePortfolioImage = (imgId: string) => {
+    if (!confirm('Are you sure you want to remove this image?')) return
+    const customImgs = storage.get<PortfolioImage[]>(STORAGE_KEYS.portfolioImages) || []
+    const updatedCustom = customImgs.filter((img) => img.id !== imgId)
+    savePortfolioImages(updatedCustom)
+    setPortfolioImgs(getPortfolioImages())
   }
 
   const handleImageUpload = async (catId: string, files: FileList | null) => {
-    if (!files || files.length === 0 || !supabase) return
-    setUploadProgress({ current: 0, total: files.length })
+    if (!files || files.length === 0) return
+    setUploading(true)
     try {
+      const customImgs = storage.get<PortfolioImage[]>(STORAGE_KEYS.portfolioImages) || []
+      const newItems: PortfolioImage[] = []
+
       for (let i = 0; i < files.length; i++) {
-        setUploadProgress({ current: i + 1, total: files.length })
         const file = files[i]
         const dataUrl = await optimizeToWebP(file)
-        const webpBlob = dataURLtoBlob(dataUrl)
-        const title = file.name.replace(/\.[^/.]+$/, '')
-        const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
-        const storagePath = `${catId}/${Date.now()}-${slug}.webp`
-        const { error: storageError } = await supabase.storage.from('portfolio').upload(storagePath, webpBlob, { contentType: 'image/webp' })
-        if (storageError) throw storageError
-        const { error: dbError } = await supabase.from('portfolio_images').insert({ slug, title, alt: `${title} - portfolio upload`, category: catId, storage_path: storagePath, orientation: 'landscape' })
-        if (dbError) throw dbError
+        const id = dataUrl
+        const title = file.name.replace(/\.[^/.]+$/, '') // file name without ext
+
+        const newItem: PortfolioImage = {
+          id,
+          slug: title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''),
+          title,
+          alt: `${title} - portfolio upload`,
+          category: catId,
+          partOfFullDay: false,
+          orientation: 'landscape',
+          exif: {
+            camera: 'Unknown',
+            lens: 'Unknown',
+            focalLength: '—',
+            aperture: '—',
+            shutter: '—',
+            iso: '—',
+          },
+        }
+        newItems.push(newItem)
       }
-      showToast(locale === 'ar' ? 'تم رفع الصور بنجاح.' : 'Images uploaded successfully.', 'success')
-      reloadPortfolio()
+
+      const updated = [...newItems, ...customImgs]
+      savePortfolioImages(updated)
+      setPortfolioImgs(getPortfolioImages())
     } catch (err) {
       console.error(err)
-      showToast(locale === 'ar' ? 'فشل رفع بعض الصور.' : 'Failed to upload some images.', 'error')
+      alert('Failed to optimize or upload images.')
     } finally {
-      setUploadProgress(null)
+      setUploading(false)
     }
   }
 
@@ -1025,7 +900,7 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
               className="h-8 md:h-9 w-auto object-contain"
             />
           </Link>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-6">
             <button
               type="button"
               onClick={toggleLocale}
@@ -1041,9 +916,11 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
                 type="button"
                 onClick={() => {
                   setShowNotifications(!showNotifications)
-                  if (!showNotifications) markNotificationsAsRead()
+                  if (!showNotifications) {
+                    markNotificationsAsRead()
+                  }
                 }}
-                className="relative p-1.5 rounded-full text-charcoal/50 hover:bg-forest/08 hover:text-forest transition-all"
+                className="relative p-1.5 rounded-full text-charcoal/60 hover:bg-forest/05 hover:text-forest transition-all flex items-center justify-center"
                 aria-label="Notifications"
               >
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1051,29 +928,29 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
                   <path d="M13.73 21a2 2 0 0 1-3.46 0" />
                 </svg>
                 {unreadCount > 0 && (
-                  <span className="absolute -top-0.5 -right-0.5 bg-red-600 text-white text-[9px] font-sans font-bold w-4 h-4 rounded-full flex items-center justify-center border-2 border-[#F5F3EE]">
-                    {unreadCount > 9 ? '9+' : unreadCount}
+                  <span className="absolute -top-0.5 -right-0.5 bg-red-600 text-white text-[9px] font-sans font-bold w-4 h-4 rounded-full flex items-center justify-center border border-white">
+                    {unreadCount}
                   </span>
                 )}
               </button>
-
+              
+              {/* Notification Dropdown Drawer */}
               <AnimatePresence>
                 {showNotifications && (
                   <>
                     <div className="fixed inset-0 z-40" onClick={() => setShowNotifications(false)} />
                     <motion.div
-                      initial={{ opacity: 0, y: 8, scale: 0.96 }}
+                      initial={{ opacity: 0, y: 10, scale: 0.95 }}
                       animate={{ opacity: 1, y: 0, scale: 1 }}
-                      exit={{ opacity: 0, y: 8, scale: 0.96 }}
-                      transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
-                      className="absolute right-0 mt-3 w-80 bg-white border border-charcoal/12 rounded-2xl shadow-xl z-50 overflow-hidden"
+                      exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                      className="absolute right-0 mt-3 w-80 bg-white border border-charcoal/15 rounded-2xl shadow-xl z-50 overflow-hidden text-left"
                     >
-                      <div className="px-4 py-3 border-b border-charcoal/08 flex items-center justify-between bg-linen/30">
-                        <span className="font-serif text-sm text-charcoal">
-                          {locale === 'ar' ? 'الإشعارات' : 'Notifications'}
+                      <div className="px-4 py-3 bg-linen/30 border-b border-charcoal/10 flex items-center justify-between">
+                        <span className="font-serif text-sm font-semibold text-charcoal">
+                          {locale === 'ar' ? 'الإشعارات الجديدة' : 'Recent Bookings'}
                         </span>
                         {unreadCount > 0 && (
-                          <span className="font-sans text-[10px] bg-forest/10 text-forest px-2 py-0.5 rounded-full">
+                          <span className="font-sans text-[10px] bg-forest/10 text-forest px-2 py-0.5 rounded-full font-medium">
                             {unreadCount} {locale === 'ar' ? 'جديد' : 'new'}
                           </span>
                         )}
@@ -1081,22 +958,27 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
                       <div className="max-h-64 overflow-y-auto divide-y divide-charcoal/05">
                         {notifications.length === 0 ? (
                           <div className="p-6 text-center font-sans text-xs text-charcoal/40">
-                            {locale === 'ar' ? 'لا توجد إشعارات.' : 'No notifications yet.'}
+                            {locale === 'ar' ? 'لا توجد إشعارات جديدة.' : 'No new notifications.'}
                           </div>
-                        ) : notifications.map((n) => (
-                          <div
-                            key={n.id}
-                            className={clsx(
-                              'px-4 py-3 font-sans text-xs transition-colors',
-                              !n.is_read && 'bg-forest/[0.03] font-medium'
-                            )}
-                          >
-                            <p className="text-charcoal/85 leading-relaxed mb-1">{n.message}</p>
-                            <span className="text-[10px] text-charcoal/35">
-                              {new Date(n.created_at).toLocaleString(locale === 'ar' ? 'ar-EG' : 'en-US', { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' })}
-                            </span>
-                          </div>
-                        ))}
+                        ) : (
+                          notifications.map((n) => (
+                            <div 
+                              key={n.id} 
+                              className={clsx(
+                                "px-4 py-3 font-sans text-xs transition-colors hover:bg-linen/20",
+                                !n.is_read && "bg-forest/[0.02] font-medium"
+                              )}
+                            >
+                              <p className="text-charcoal/90 mb-1 leading-normal">{n.message}</p>
+                              <span className="text-[10px] text-charcoal/40">
+                                {new Date(n.created_at).toLocaleDateString(locale === 'ar' ? 'ar-EG' : 'en-US', {
+                                  hour: '2-digit',
+                                  minute: '2-digit'
+                                })}
+                              </span>
+                            </div>
+                          ))
+                        )}
                       </div>
                     </motion.div>
                   </>
@@ -1475,7 +1357,13 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
                           <div className="flex items-center gap-3">
                             <button
                               type="button"
-                              onClick={() => toggleFullyBooked(date)}
+                              onClick={() => {
+                                if (isFullyBooked) {
+                                  toggleFullyBooked(date)
+                                } else {
+                                  setPendingFullyBookedDate(date)
+                                }
+                              }}
                               className={clsx(
                                 'font-sans text-[10px] tracking-wider uppercase px-2.5 py-1 rounded transition-colors font-medium',
                                 isFullyBooked
@@ -1723,42 +1611,23 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
                     </div>
 
                     {/* Multiple Image Upload Box */}
-                    <div className="flex flex-col gap-3 bg-linen/25 p-4 rounded-xl border border-dashed border-charcoal/15">
-                      <div className="flex items-center gap-4">
-                        <label className="flex flex-col cursor-pointer">
-                          <span className={clsx(
-                            'font-sans text-xs tracking-wider uppercase px-4 py-2.5 rounded-lg transition',
-                            uploadProgress !== null
-                              ? 'bg-forest/40 text-cream cursor-not-allowed'
-                              : 'bg-forest text-cream hover:bg-forest/85'
-                          )}>
-                            {uploadProgress !== null
-                              ? `${locale === 'ar' ? 'جاري الرفع' : 'Uploading'} ${uploadProgress.current}/${uploadProgress.total}…`
-                              : d.uploadImages}
-                          </span>
-                          <input
-                            type="file"
-                            multiple
-                            accept="image/*"
-                            className="hidden"
-                            disabled={uploadProgress !== null}
-                            onChange={(e) => handleImageUpload(cat.id, e.target.files)}
-                          />
-                        </label>
-                        <p className="font-sans text-[10px] text-charcoal/40">
-                          {d.uploadDesc}
-                        </p>
-                      </div>
-                      {uploadProgress !== null && (
-                        <div className="w-full bg-charcoal/08 rounded-full h-1.5 overflow-hidden">
-                          <motion.div
-                            className="bg-forest h-full rounded-full"
-                            initial={{ width: 0 }}
-                            animate={{ width: `${(uploadProgress.current / uploadProgress.total) * 100}%` }}
-                            transition={{ duration: 0.3 }}
-                          />
-                        </div>
-                      )}
+                    <div className="flex items-center gap-4 bg-linen/25 p-4 rounded-xl border border-dashed border-charcoal/15">
+                      <label className="flex flex-col cursor-pointer">
+                        <span className="font-sans text-xs tracking-wider uppercase bg-forest text-cream px-4 py-2.5 rounded-lg hover:bg-forest-deep transition">
+                          {d.uploadImages}
+                        </span>
+                        <input
+                          type="file"
+                          multiple
+                          accept="image/*"
+                          className="hidden"
+                          disabled={uploading}
+                          onChange={(e) => handleImageUpload(cat.id, e.target.files)}
+                        />
+                      </label>
+                      <p className="font-sans text-[10px] text-charcoal/40">
+                        {d.uploadDesc}
+                      </p>
                     </div>
 
                     {/* Image Previews */}
@@ -1769,7 +1638,7 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
                     ) : (
                       <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3">
                         {catImages.map((img) => {
-                          const src = img.id.startsWith('data:') || img.id.startsWith('blob:') || img.id.startsWith('http')
+                          const src = img.id.startsWith('data:') || img.id.startsWith('blob:')
                             ? img.id
                             : `/images/portfolio/${img.id}-sm.webp`
 
@@ -1805,88 +1674,97 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
       {/* Fully Booked Confirmation Dialog */}
       <AnimatePresence>
         {pendingFullyBookedDate && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[60] bg-charcoal/40 backdrop-blur-sm flex items-center justify-center px-4"
-          >
+          <div className="fixed inset-0 z-[100] flex items-center justify-center px-4">
             <motion.div
-              initial={{ opacity: 0, scale: 0.94, y: 16 }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setPendingFullyBookedDate(null)}
+              className="absolute inset-0 bg-charcoal/40 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.94, y: 16 }}
-              transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-              className="bg-white rounded-2xl p-8 max-w-sm w-full shadow-2xl"
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className="bg-white border border-charcoal/10 rounded-2xl p-6 max-w-sm w-full shadow-2xl relative z-50 text-center space-y-5"
             >
-              <div className="text-center mb-6">
-                <div className="w-12 h-12 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-                    <line x1="16" y1="2" x2="16" y2="6" />
-                    <line x1="8" y1="2" x2="8" y2="6" />
-                    <line x1="3" y1="10" x2="21" y2="10" />
-                    <line x1="9" y1="14" x2="15" y2="14" />
-                  </svg>
-                </div>
-                <h3 className="font-serif text-xl text-charcoal mb-2">
-                  {locale === 'ar' ? 'تأكيد القفل الكامل' : 'Mark as Fully Booked?'}
+              <div className="w-12 h-12 rounded-full bg-red-500/10 text-red-600 flex items-center justify-center mx-auto">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                  <line x1="12" y1="9" x2="12" y2="13" />
+                  <line x1="12" y1="17" x2="12.01" y2="17" />
+                </svg>
+              </div>
+              <div className="space-y-2">
+                <h3 className="font-serif text-lg text-charcoal">
+                  {locale === 'ar' ? 'هل أنت متأكد من قفل اليوم؟' : 'Confirm Fully Booked Day'}
                 </h3>
-                <p className="font-sans text-sm text-charcoal/55 leading-relaxed">
+                <p className="font-sans text-xs text-charcoal/60 leading-relaxed">
                   {locale === 'ar'
-                    ? `هل أنت متأكد من قفل يوم ${pendingFullyBookedDate} بالكامل؟ لن يتمكن أي عميل من الحجز في هذا اليوم.`
-                    : `Mark ${pendingFullyBookedDate} as Fully Booked? Clients will not be able to book this date.`}
+                    ? `هل أنت متأكد أنك تريد تمييز يوم ${pendingFullyBookedDate} كـ "ممتلئ بالكامل"؟ سيتم قفله للزبائن في قائمة الحجز.`
+                    : `Are you sure you want to mark ${pendingFullyBookedDate} as Fully Booked? This will block clients from selecting it.`}
                 </p>
               </div>
-              <div className="flex gap-3">
+              <div className="flex gap-3 justify-center pt-2">
                 <button
                   type="button"
                   onClick={() => setPendingFullyBookedDate(null)}
-                  className="flex-1 font-sans text-sm border border-charcoal/20 text-charcoal/60 rounded-xl py-3 hover:bg-charcoal/05 transition"
+                  className="font-sans text-xs tracking-wider uppercase bg-linen border border-charcoal/10 text-charcoal px-4 py-2.5 rounded-lg hover:bg-linen/85 transition-all w-full"
                 >
                   {locale === 'ar' ? 'إلغاء' : 'Cancel'}
                 </button>
                 <button
                   type="button"
-                  onClick={() => confirmFullyBooked(pendingFullyBookedDate)}
-                  className="flex-1 font-sans text-sm bg-red-600 text-white rounded-xl py-3 hover:bg-red-700 transition"
+                  onClick={() => {
+                    const dateToToggle = pendingFullyBookedDate
+                    setPendingFullyBookedDate(null)
+                    toggleFullyBooked(dateToToggle)
+                  }}
+                  className="font-sans text-xs tracking-wider uppercase bg-red-600 text-white px-4 py-2.5 rounded-lg hover:bg-red-700 transition-all w-full font-medium"
                 >
-                  {locale === 'ar' ? 'نعم، قفل اليوم' : 'Yes, Mark Fully Booked'}
+                  {locale === 'ar' ? 'تأكيد' : 'Confirm'}
                 </button>
               </div>
             </motion.div>
-          </motion.div>
+          </div>
         )}
       </AnimatePresence>
 
-      {/* Toast Notifications */}
-      <div className="fixed bottom-6 right-6 z-[70] flex flex-col gap-2 items-end pointer-events-none">
+      {/* Toast Notifications Overlay Container */}
+      <div className="fixed bottom-6 right-6 z-[100] flex flex-col gap-3">
         <AnimatePresence>
           {toasts.map((toast) => (
             <motion.div
               key={toast.id}
-              initial={{ opacity: 0, x: 40, scale: 0.95 }}
-              animate={{ opacity: 1, x: 0, scale: 1 }}
-              exit={{ opacity: 0, x: 40, scale: 0.95 }}
-              transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+              initial={{ opacity: 0, y: 20, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95, transition: { duration: 0.2 } }}
               className={clsx(
-                'pointer-events-auto flex items-center gap-3 px-4 py-3 rounded-xl shadow-lg font-sans text-sm max-w-xs',
-                toast.type === 'success'
-                  ? 'bg-charcoal text-cream'
-                  : 'bg-red-600 text-white'
+                "px-5 py-3.5 rounded-xl shadow-lg border text-sm font-sans flex items-center gap-3 backdrop-blur-md min-w-[280px] max-w-sm justify-between",
+                toast.type === 'error'
+                  ? "bg-red-50/95 border-red-200 text-red-800"
+                  : "bg-white/95 border-charcoal/10 text-forest font-medium"
               )}
             >
-              {toast.type === 'success' ? (
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="20 6 9 17 4 12" />
-                </svg>
-              ) : (
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="12" cy="12" r="10" />
-                  <line x1="12" y1="8" x2="12" y2="12" />
-                  <line x1="12" y1="16" x2="12.01" y2="16" />
-                </svg>
-              )}
-              {toast.message}
+              <div className="flex items-center gap-2.5">
+                {toast.type === 'error' ? (
+                  <svg className="text-red-500 shrink-0" width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                  </svg>
+                ) : (
+                  <svg className="text-forest shrink-0" width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                  </svg>
+                )}
+                <span>{toast.message}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setToasts((prev) => prev.filter((t) => t.id !== toast.id))}
+                className="text-charcoal/30 hover:text-charcoal/60 transition-colors"
+              >
+                ✕
+              </button>
             </motion.div>
           ))}
         </AnimatePresence>
