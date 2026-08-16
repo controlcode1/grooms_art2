@@ -225,16 +225,26 @@ export function SessionPackageStep({ selected, city, onSelect }: SessionPackageS
         </div>
       )}
 
-      {/* 3. MOBILE DETAIL MODAL */}
+      {/* 3. DETAIL MODAL */}
       <AnimatePresence>
         {activeModalPkg && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-charcoal/70 backdrop-blur-sm">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-charcoal/70 backdrop-blur-sm">
             <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-[#FAFAF7] w-full max-w-md rounded-2xl p-6 shadow-2xl border border-charcoal/10 max-h-[85vh] overflow-y-auto flex flex-col text-left"
+              initial={{ opacity: 0, scale: 0.96, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 10 }}
+              transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+              className="bg-[#FAFAF7] w-full max-w-lg rounded-3xl p-6 sm:p-8 shadow-2xl border border-charcoal/10 max-h-[88vh] overflow-y-auto flex flex-col text-center relative"
             >
+              <button
+                type="button"
+                onClick={() => setActiveModalPkg(null)}
+                className="absolute top-4 right-4 rtl:right-auto rtl:left-4 w-9 h-9 rounded-full flex items-center justify-center text-charcoal/50 hover:text-charcoal hover:bg-charcoal/06 transition-colors text-base z-10"
+                aria-label="Close modal"
+              >
+                ✕
+              </button>
+
               {(() => {
                 const name = getPackageDisplayName(activeModalPkg, locale)
                 const desc = getPackageDisplayDescription(activeModalPkg, locale)
@@ -243,68 +253,63 @@ export function SessionPackageStep({ selected, city, onSelect }: SessionPackageS
 
                 return (
                   <>
-                    <div className="flex justify-between items-start mb-4">
-                      <div>
-                        {badge && (
-                          <span className="inline-block font-sans text-[8px] tracking-[0.2em] uppercase px-2.5 py-0.5 rounded-full bg-forest text-cream font-semibold mb-2">
-                            {badge}
-                          </span>
-                        )}
-                        <h3 className="font-serif text-2xl text-charcoal font-medium">
-                          {name}
-                        </h3>
-                        <p className="font-serif text-3xl text-forest mt-1">
-                          ${activeModalPkg.price.toLocaleString()}
+                    {/* Header: Badge, Package Title, Price, Description */}
+                    <div className="flex flex-col items-center pt-2 pb-2">
+                      {badge && (
+                        <span className="inline-block font-sans text-[9px] tracking-[0.22em] uppercase px-3.5 py-1 rounded-full bg-white border border-charcoal/10 text-charcoal/75 font-semibold mb-3 shadow-xs">
+                          {badge}
+                        </span>
+                      )}
+
+                      <h3 className="font-serif text-3xl sm:text-4xl text-charcoal font-medium tracking-tight">
+                        {name}
+                      </h3>
+
+                      <p className="font-serif text-3xl sm:text-4xl text-forest font-normal mt-2">
+                        ${activeModalPkg.price.toLocaleString()}
+                      </p>
+
+                      {desc && (
+                        <p className="font-sans text-xs sm:text-sm text-charcoal/65 mt-3 max-w-md mx-auto leading-relaxed">
+                          {desc}
                         </p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setActiveModalPkg(null)}
-                        className="w-8 h-8 rounded-full flex items-center justify-center text-charcoal/50 hover:bg-charcoal/05 text-sm"
-                        aria-label="Close modal"
-                      >
-                        ✕
-                      </button>
+                      )}
                     </div>
 
-                    {desc && (
-                      <p className="font-sans text-xs text-charcoal/60 mb-4 leading-relaxed">
-                        {desc}
-                      </p>
-                    )}
+                    <div className="w-12 h-px bg-forest/25 mx-auto my-3" />
 
-                    <div className="divider-hairline mb-5" />
-
-                    <div className="space-y-4 flex-1 overflow-y-auto mb-6 pr-1">
+                    {/* Vertically Stacked & Centered Sections */}
+                    <div className="space-y-6 flex-1 overflow-y-auto py-3 px-1">
                       {featureGroups.map((group, gIdx) => (
-                        <div key={gIdx}>
-                          <p className="font-sans text-[10px] tracking-[0.22em] uppercase text-charcoal/40 mb-2 font-semibold">
+                        <div key={gIdx} className="space-y-2 text-center">
+                          <h4 className="font-sans text-[11px] tracking-[0.22em] uppercase text-forest font-bold">
                             {group.title}
-                          </p>
-                          <ul className="space-y-1.5">
+                          </h4>
+                          <div className="space-y-1">
                             {group.items.map((item, itemIdx) => (
-                              <li key={itemIdx} className="flex gap-2 font-sans text-xs text-charcoal/75">
-                                <span className="text-forest/70 font-bold">—</span>
-                                <span>{item}</span>
-                              </li>
+                              <p key={itemIdx} className="font-sans text-xs sm:text-sm text-charcoal/80 leading-relaxed">
+                                {item}
+                              </p>
                             ))}
-                          </ul>
+                          </div>
                         </div>
                       ))}
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={() => {
-                        onSelect(activeModalPkg.package_key)
-                        setActiveModalPkg(null)
-                      }}
-                      className="w-full text-center font-sans text-xs tracking-[0.18em] uppercase py-3.5 rounded-xl bg-forest text-cream border border-forest hover:bg-forest-deep transition-colors font-medium shadow-sm"
-                    >
-                      {selected === activeModalPkg.package_key
-                        ? (locale === 'ar' ? 'الباقة مختارة بالفعل' : 'Package Already Selected')
-                        : (locale === 'ar' ? 'اختيار هذه الباقة' : 'Select this Package')}
-                    </button>
+                    <div className="pt-4 border-t border-charcoal/08 mt-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onSelect(activeModalPkg.package_key)
+                          setActiveModalPkg(null)
+                        }}
+                        className="w-full text-center font-sans text-xs tracking-[0.18em] uppercase py-4 rounded-xl bg-forest text-cream border border-forest hover:bg-forest-deep transition-colors font-medium shadow-sm"
+                      >
+                        {selected === activeModalPkg.package_key
+                          ? (locale === 'ar' ? 'الباقة مختارة بالفعل' : 'Package Already Selected')
+                          : (locale === 'ar' ? 'اختيار هذه الباقة' : 'Select this Package')}
+                      </button>
+                    </div>
                   </>
                 )
               })()}

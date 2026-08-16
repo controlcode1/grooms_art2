@@ -3,7 +3,6 @@ import { motion } from 'motion/react'
 import { Section, Eyebrow } from '@/features/shared/components/Section'
 import { imageSrcSet } from '@/lib/data/portfolio'
 import { useI18n } from '@/lib/i18n'
-import { Link } from '@tanstack/react-router'
 
 export const Route = createFileRoute('/about')({
   head: () => ({
@@ -81,15 +80,6 @@ function AboutPage() {
               ? 'فريق صغير ومتعمّد من المصورين والمخرجين السينمائيين يسافر بخفة ويلتقط لحظاتك بصدق — في أي مكان، في أي موسم، في كل مكان حول العالم.'
               : 'A small, deliberate team of photographers and cinematographers who travel light and shoot honestly — on location, in any season, anywhere in the world.'}
           </p>
-
-          <div className="mt-12">
-            <Link
-              to="/portfolio"
-              className="font-sans text-xs tracking-[0.2em] uppercase bg-charcoal text-cream px-8 py-4 rounded-lg hover:bg-forest transition-colors duration-500"
-            >
-              {t.home.heroCta}
-            </Link>
-          </div>
         </motion.div>
       </Section>
     </>
