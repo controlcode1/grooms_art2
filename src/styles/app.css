@@ -10,10 +10,10 @@
   --color-forest-deep: #0b241c;
   --color-sage: #436850;
   --color-sage-light: #6c8c76;
-  --color-sand: #f4f1ea;
+  --color-sand: #f8f5ef;
   --color-cream: #fbfada;
   --color-charcoal: #111111;
-  --color-linen: #efe9de;
+  --color-linen: #f0ece4;
 
   /* Typography */
   --font-serif: "Cormorant Garamond", "Times New Roman", serif;
@@ -30,7 +30,7 @@
 @layer base {
   html {
     scroll-behavior: smooth;
-    background-color: var(--color-sand);
+    background-color: #FAFAF7;
   }
 
   html[dir="rtl"] body {

@@ -27,6 +27,14 @@ import {
   type BookingType,
   triggerWhatsApp,
 } from '@/lib/types/booking'
+import {
+  loadAllPackages,
+  upsertPackage,
+  deletePackage,
+  reorderPackages,
+  type Package,
+  type PackageFeatureGroup,
+} from '@/lib/data/packages'
 
 export const Route = createFileRoute('/dashboard')({
   head: () => ({
@@ -38,7 +46,7 @@ export const Route = createFileRoute('/dashboard')({
 // ─── Constants ──────────────────────────────────────────────────────────────
 const MONTH_FORMATTER = new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' })
 
-type DashboardTab = 'bookings' | 'availability' | 'portfolio'
+type DashboardTab = 'bookings' | 'availability' | 'packages' | 'portfolio'
 
 // ─── Client-side WebP Image Optimization ─────────────────────────────────────
 async function optimizeToWebP(file: File): Promise<string> {
@@ -134,6 +142,272 @@ function SectionHeading({ title, desc }: { title: string; desc?: string }) {
     <div className="mb-6">
       <h2 className="font-serif text-2xl text-charcoal">{title}</h2>
       {desc && <p className="font-sans text-xs text-charcoal/50 mt-1">{desc}</p>}
+    </div>
+  )
+}
+
+function PackageEditorCard({
+  pkg,
+  d,
+  locale,
+  onSave,
+  onDelete,
+  onMoveUp,
+  onMoveDown,
+  isSaved,
+}: {
+  pkg: Package
+  d: any
+  locale: string
+  onSave: (pkg: Package) => Promise<void>
+  onDelete: (id: string) => Promise<void>
+  onMoveUp: () => Promise<void>
+  onMoveDown: () => Promise<void>
+  isSaved?: boolean
+}) {
+  const [formData, setFormData] = useState<Package>(pkg)
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    setFormData(pkg)
+  }, [pkg])
+
+  const handleFeatureTitleChange = (gIdx: number, newTitle: string) => {
+    const updatedFeatures = [...(formData.features || [])]
+    updatedFeatures[gIdx] = { ...updatedFeatures[gIdx], title: newTitle }
+    setFormData({ ...formData, features: updatedFeatures })
+  }
+
+  const handleFeatureItemsTextChange = (gIdx: number, text: string) => {
+    const items = text.split('\n').map((l) => l.trim()).filter(Boolean)
+    const updatedFeatures = [...(formData.features || [])]
+    updatedFeatures[gIdx] = { ...updatedFeatures[gIdx], items }
+    setFormData({ ...formData, features: updatedFeatures })
+  }
+
+  const handleAddFeatureSection = () => {
+    const updatedFeatures = [...(formData.features || []), { title: 'New Section', items: ['Feature 1'] }]
+    setFormData({ ...formData, features: updatedFeatures })
+  }
+
+  const handleRemoveFeatureSection = (gIdx: number) => {
+    const updatedFeatures = (formData.features || []).filter((_, i) => i !== gIdx)
+    setFormData({ ...formData, features: updatedFeatures })
+  }
+
+  const submitSave = async () => {
+    setSaving(true)
+    await onSave(formData)
+    setSaving(false)
+  }
+
+  return (
+    <div className="bg-white border border-charcoal/10 rounded-2xl p-6 shadow-sm space-y-6">
+      {/* Header with Title, Status & Actions */}
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-charcoal/06 pb-4">
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setFormData({ ...formData, active: !formData.active })}
+            className={clsx(
+              'font-sans text-[10px] tracking-wider uppercase px-3 py-1.5 rounded-full font-semibold transition-all',
+              formData.active
+                ? 'bg-green-100 text-green-800 hover:bg-green-200'
+                : 'bg-charcoal/10 text-charcoal/50 hover:bg-charcoal/15',
+            )}
+          >
+            {formData.active ? '● ' + d.visibleOnSite : '○ ' + d.hiddenFromSite}
+          </button>
+
+          {formData.badge && (
+            <span className="font-sans text-[10px] tracking-wider uppercase px-2.5 py-1 rounded-full bg-forest/10 text-forest font-semibold">
+              {formData.badge}
+            </span>
+          )}
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={onMoveUp}
+            className="px-2 py-1 text-charcoal/50 hover:text-charcoal border border-charcoal/15 rounded-lg text-xs font-sans font-medium"
+            title={d.moveUp}
+          >
+            {d.moveUp}
+          </button>
+          <button
+            type="button"
+            onClick={onMoveDown}
+            className="px-2 py-1 text-charcoal/50 hover:text-charcoal border border-charcoal/15 rounded-lg text-xs font-sans font-medium"
+            title={d.moveDown}
+          >
+            {d.moveDown}
+          </button>
+          <button
+            type="button"
+            onClick={() => onDelete(pkg.id)}
+            className="font-sans text-xs uppercase text-red-500 hover:text-red-700 px-2 py-1"
+          >
+            {d.remove}
+          </button>
+        </div>
+      </div>
+
+      {/* Main Form Fields */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div>
+          <label className="font-sans text-[10px] uppercase tracking-wider text-charcoal/45 block mb-1 font-semibold">
+            {d.nameEn}
+          </label>
+          <input
+            type="text"
+            value={formData.name}
+            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+            className="w-full font-sans text-xs border border-charcoal/15 rounded-xl px-3 py-2.5 outline-none focus:border-forest"
+          />
+        </div>
+
+        <div>
+          <label className="font-sans text-[10px] uppercase tracking-wider text-charcoal/45 block mb-1 font-semibold">
+            {d.nameAr}
+          </label>
+          <input
+            type="text"
+            value={formData.name_ar}
+            onChange={(e) => setFormData({ ...formData, name_ar: e.target.value })}
+            className="w-full font-sans text-xs border border-charcoal/15 rounded-xl px-3 py-2.5 outline-none focus:border-forest text-right"
+          />
+        </div>
+
+        <div>
+          <label className="font-sans text-[10px] uppercase tracking-wider text-charcoal/45 block mb-1 font-semibold">
+            {d.priceUsd}
+          </label>
+          <input
+            type="number"
+            value={formData.price}
+            onChange={(e) => setFormData({ ...formData, price: Number(e.target.value) })}
+            className="w-full font-sans text-xs border border-charcoal/15 rounded-xl px-3 py-2.5 outline-none focus:border-forest"
+          />
+        </div>
+
+        <div>
+          <label className="font-sans text-[10px] uppercase tracking-wider text-charcoal/45 block mb-1 font-semibold">
+            {d.badgeOptional}
+          </label>
+          <input
+            type="text"
+            value={formData.badge || ''}
+            onChange={(e) => setFormData({ ...formData, badge: e.target.value })}
+            placeholder="e.g. Most Popular"
+            className="w-full font-sans text-xs border border-charcoal/15 rounded-xl px-3 py-2.5 outline-none focus:border-forest"
+          />
+        </div>
+
+        <div>
+          <label className="font-sans text-[10px] uppercase tracking-wider text-charcoal/45 block mb-1 font-semibold">
+            {d.accentColorOptional}
+          </label>
+          <input
+            type="text"
+            value={formData.accent_color || ''}
+            onChange={(e) => setFormData({ ...formData, accent_color: e.target.value })}
+            placeholder="#12372a"
+            className="w-full font-sans text-xs border border-charcoal/15 rounded-xl px-3 py-2.5 outline-none focus:border-forest"
+          />
+        </div>
+
+        <div>
+          <label className="font-sans text-[10px] uppercase tracking-wider text-charcoal/45 block mb-1 font-semibold">
+            {d.imageUrlOptional}
+          </label>
+          <input
+            type="text"
+            value={formData.image_url || ''}
+            onChange={(e) => setFormData({ ...formData, image_url: e.target.value })}
+            placeholder="/images/hero.webp"
+            className="w-full font-sans text-xs border border-charcoal/15 rounded-xl px-3 py-2.5 outline-none focus:border-forest"
+          />
+        </div>
+
+        <div className="sm:col-span-2 lg:col-span-3">
+          <label className="font-sans text-[10px] uppercase tracking-wider text-charcoal/45 block mb-1 font-semibold">
+            {d.descEn}
+          </label>
+          <textarea
+            value={formData.description || ''}
+            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+            rows={2}
+            className="w-full font-sans text-xs border border-charcoal/15 rounded-xl px-3 py-2 outline-none focus:border-forest resize-none"
+          />
+        </div>
+      </div>
+
+      {/* Feature Sections Editor */}
+      <div className="border-t border-charcoal/06 pt-4 space-y-4">
+        <div className="flex items-center justify-between">
+          <h4 className="font-serif text-base text-charcoal">{d.featureSections}</h4>
+          <button
+            type="button"
+            onClick={handleAddFeatureSection}
+            className="font-sans text-xs text-forest hover:underline font-medium"
+          >
+            {d.addSection}
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {(formData.features || []).map((group, gIdx) => (
+            <div key={gIdx} className="bg-linen/25 border border-charcoal/08 rounded-xl p-4 space-y-2.5 relative group">
+              <div className="flex items-center justify-between gap-2">
+                <input
+                  type="text"
+                  value={group.title}
+                  onChange={(e) => handleFeatureTitleChange(gIdx, e.target.value)}
+                  placeholder={d.sectionTitle}
+                  className="font-sans text-xs font-semibold border-b border-charcoal/20 bg-transparent pb-1 outline-none focus:border-forest flex-1"
+                />
+                <button
+                  type="button"
+                  onClick={() => handleRemoveFeatureSection(gIdx)}
+                  className="text-red-400 hover:text-red-600 text-xs px-1"
+                  title="Remove Section"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <textarea
+                value={group.items?.join('\n') || ''}
+                onChange={(e) => handleFeatureItemsTextChange(gIdx, e.target.value)}
+                placeholder={d.featuresPlaceholder}
+                rows={3}
+                className="w-full font-sans text-xs bg-white border border-charcoal/10 rounded-lg p-2.5 outline-none focus:border-forest resize-none leading-relaxed"
+              />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Footer with Save Action */}
+      <div className="border-t border-charcoal/06 pt-4 flex items-center justify-between">
+        <div>
+          {isSaved && (
+            <span className="font-sans text-xs text-green-700 font-semibold animate-fadeIn">
+              {d.packageSaved}
+            </span>
+          )}
+        </div>
+
+        <button
+          type="button"
+          onClick={submitSave}
+          disabled={saving}
+          className="font-sans text-xs tracking-wider uppercase bg-forest text-cream px-6 py-2.5 rounded-xl hover:bg-forest-deep transition-colors font-medium shadow-sm disabled:opacity-50"
+        >
+          {saving ? 'Saving…' : d.savePackage}
+        </button>
+      </div>
     </div>
   )
 }
@@ -273,6 +547,7 @@ const DASHBOARD_T = {
   en: {
     bookings: 'Bookings',
     availability: 'Availability',
+    packages: 'Package Management',
     portfolio: 'Portfolio',
     totalBookings: 'Total Bookings',
     pendingApproval: 'Pending Approval',
@@ -298,9 +573,14 @@ const DASHBOARD_T = {
     bookingApproved: '✓ Booking Approved',
     deleteRecord: 'Delete Record',
     noBookings: 'No bookings match this filter',
+    // Upcoming Bookings
+    upcomingTitle: 'Upcoming Bookings (Next 3 Days)',
+    upcomingDesc: 'Bookings scheduled for today, tomorrow, and the next day.',
+    viewDetails: 'View Details',
     // Availability
     dateBlocking: 'Date Blocking',
     dateBlockingDesc: 'Click dates on the calendar to toggle blocked/unblocked status for bookings.',
+    availabilityWorkflowNote: 'Bookings continue arriving normally. You review booking requests manually and decide when a day should become Fully Booked or closed.',
     blockedDatesList: 'Blocked Dates List',
     noBlockedDates: 'No blocked dates. Click dates on the calendar to block them.',
     unblock: 'Unblock',
@@ -313,6 +593,28 @@ const DASHBOARD_T = {
     descEn: 'English Description',
     descAr: 'Arabic Description',
     remove: 'Remove',
+    // Packages Management
+    packagesManagement: 'Package Management',
+    packagesManagementDesc: 'Manage pricing, features, and visibility for each city and service. Changes reflect immediately on the website.',
+    sessionsService: 'Sessions',
+    fullDayService: 'Full Day',
+    addPackage: '+ Add New Package',
+    savePackage: 'Save Package',
+    packageSaved: '✓ Package Saved to Supabase',
+    packageDeleted: 'Package Deleted',
+    packageKey: 'Package Slug/Key (e.g. essential)',
+    priceUsd: 'Price (USD $)',
+    badgeOptional: 'Badge / Pill Label (e.g. Most Popular)',
+    accentColorOptional: 'Accent Color (Hex, e.g. #12372a)',
+    imageUrlOptional: 'Image URL (Optional)',
+    visibleOnSite: 'Visible on Website',
+    hiddenFromSite: 'Hidden from Website',
+    featureSections: 'Feature Sections & Deliverables',
+    addSection: '+ Add Section',
+    sectionTitle: 'Section Title (e.g. Album, Film, Includes)',
+    featuresPlaceholder: 'Features (one item per line)',
+    moveUp: '↑ Up',
+    moveDown: '↓ Down',
     // Portfolio
     portfolioCategories: 'Portfolio Categories',
     portfolioCategoriesDesc: 'Add new sections to your gallery archive.',
@@ -331,6 +633,7 @@ const DASHBOARD_T = {
   ar: {
     bookings: 'الحجوزات',
     availability: 'التوفر',
+    packages: 'إدارة الباقات',
     portfolio: 'الأعمال',
     totalBookings: 'إجمالي الحجوزات',
     pendingApproval: 'قيد الانتظار',
@@ -356,9 +659,14 @@ const DASHBOARD_T = {
     bookingApproved: '✓ تم تأكيد الحجز',
     deleteRecord: 'حذف السجل',
     noBookings: 'لا توجد حجوزات تطابق التصفية',
+    // Upcoming Bookings
+    upcomingTitle: 'الحجوزات القادمة (خلال 3 أيام)',
+    upcomingDesc: 'الحجوزات المجدولة لليوم وغداً واليوم التالي.',
+    viewDetails: 'عرض التفاصيل',
     // Availability
     dateBlocking: 'حظر التواريخ',
     dateBlockingDesc: 'اضغط على التواريخ في التقويم لتبديل حالة الحظر للحجوزات.',
+    availabilityWorkflowNote: 'تصل الحجوزات بشكل طبيعي، وتقوم بمراجعة الطلبات يدوياً واتخاذ قرار إغلاق اليوم أو تحديده كمكتمل.',
     blockedDatesList: 'قائمة التواريخ المحظورة',
     noBlockedDates: 'لا توجد تواريخ محظورة. اضغط على التواريخ في التقويم لحظرها.',
     unblock: 'إلغاء الحظر',
@@ -371,6 +679,28 @@ const DASHBOARD_T = {
     descEn: 'الوصف بالإنجليزية',
     descAr: 'الوصف بالعربية',
     remove: 'حذف',
+    // Packages Management
+    packagesManagement: 'إدارة الباقات',
+    packagesManagementDesc: 'إدارة الأسعار والمميزات وظهور الباقات مباشرة في Supabase لكل مدينة وخدمة.',
+    sessionsService: 'الجلسات',
+    fullDayService: 'اليوم الكامل',
+    addPackage: '+ إضافة باقة جديدة',
+    savePackage: 'حفظ الباقة',
+    packageSaved: '✓ تم حفظ الباقة في Supabase',
+    packageDeleted: 'تم حذف الباقة',
+    packageKey: 'رمز الباقة (مثلاً essential)',
+    priceUsd: 'السعر بالدولار ($)',
+    badgeOptional: 'شارة مميزة (مثلاً الأكثر طلباً)',
+    accentColorOptional: 'لون التمييز (مثلاً #12372a)',
+    imageUrlOptional: 'رابط الصورة (اختياري)',
+    visibleOnSite: 'ظاهرة على الموقع',
+    hiddenFromSite: 'مخفية من الموقع',
+    featureSections: 'أقسام المميزات والتسليمات',
+    addSection: '+ إضافة قسم',
+    sectionTitle: 'عنوان القسم (مثلاً الألبوم، الفيديو)',
+    featuresPlaceholder: 'المميزات (عنصر واحد في كل سطر)',
+    moveUp: '↑ لأعلى',
+    moveDown: '↓ لأسفل',
     // Portfolio
     portfolioCategories: 'تصنيفات الأعمال',
     portfolioCategoriesDesc: 'أضف أقساماً جديدة إلى معرض أعمالك.',
@@ -580,6 +910,118 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
   const handleFinalSend = (b: Booking) => {
     window.open(getFinalConfirmationWhatsAppLink(b), '_blank')
     updateBookingStatus(b.id, 'approved')
+  }
+
+  // ─── Upcoming Bookings (3-day rolling window: Today, Tomorrow, Day After Tomorrow) ───
+  const upcomingBookings = useMemo(() => {
+    const todayD = new Date()
+    todayD.setHours(0, 0, 0, 0)
+    const toIso = (d: Date) => {
+      const year = d.getFullYear()
+      const month = String(d.getMonth() + 1).padStart(2, '0')
+      const day = String(d.getDate()).padStart(2, '0')
+      return `${year}-${month}-${day}`
+    }
+
+    const t1 = new Date(todayD)
+    t1.setDate(t1.getDate() + 1)
+    const t2 = new Date(todayD)
+    t2.setDate(t2.getDate() + 2)
+
+    const validDates = new Set([toIso(todayD), toIso(t1), toIso(t2)])
+    return bookings
+      .filter((b) => validDates.has(b.date))
+      .sort((a, b) => a.date.localeCompare(b.date))
+  }, [bookings])
+
+  // ─── State for Packages Management ───
+  const [packagesList, setPackagesList] = useState<Package[]>([])
+  const [pkgCity, setPkgCity] = useState<'baghdad' | 'erbil'>('baghdad')
+  const [pkgService, setPkgService] = useState<'sessions' | 'full-day'>('sessions')
+  const [pkgLoading, setPkgLoading] = useState(false)
+  const [editingPkgId, setEditingPkgId] = useState<string | null>(null)
+  const [editPkgForm, setEditPkgForm] = useState<Package | null>(null)
+  const [pkgSaveMessage, setPkgSaveMessage] = useState<string | null>(null)
+
+  const reloadPackages = useCallback(async () => {
+    setPkgLoading(true)
+    const data = await loadAllPackages()
+    setPackagesList(data)
+    setPkgLoading(false)
+  }, [])
+
+  useEffect(() => {
+    reloadPackages()
+  }, [reloadPackages])
+
+  const handleSavePackage = async (pkgToSave: Package) => {
+    const { error } = await upsertPackage(pkgToSave)
+    if (error) {
+      alert('Failed to save package: ' + (error.message || error))
+    } else {
+      setPkgSaveMessage(pkgToSave.id)
+      setTimeout(() => setPkgSaveMessage(null), 3000)
+      setEditingPkgId(null)
+      setEditPkgForm(null)
+      reloadPackages()
+    }
+  }
+
+  const handleDeletePackage = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this package?')) return
+    const { error } = await deletePackage(id)
+    if (error) {
+      alert('Failed to delete package: ' + (error.message || error))
+    } else {
+      reloadPackages()
+    }
+  }
+
+  const handleMoveOrder = async (pkg: Package, direction: 'up' | 'down') => {
+    const currentList = packagesList
+      .filter((p) => p.city === pkg.city && p.service === pkg.service)
+      .sort((a, b) => a.sort_order - b.sort_order)
+    
+    const index = currentList.findIndex((p) => p.id === pkg.id)
+    if (index === -1) return
+    if (direction === 'up' && index === 0) return
+    if (direction === 'down' && index === currentList.length - 1) return
+
+    const swapIndex = direction === 'up' ? index - 1 : index + 1
+    const target = currentList[swapIndex]
+
+    const updates = [
+      { id: pkg.id, sort_order: target.sort_order },
+      { id: target.id, sort_order: pkg.sort_order },
+    ]
+
+    await reorderPackages(updates)
+    reloadPackages()
+  }
+
+  const handleCreateNewPackage = () => {
+    const cityPkgs = packagesList.filter((p) => p.city === pkgCity && p.service === pkgService)
+    const newPkg: Package = {
+      id: `pkg-${Date.now()}`,
+      city: pkgCity,
+      service: pkgService,
+      package_key: `custom-${Date.now().toString().slice(-4)}`,
+      name: 'New Collection',
+      name_ar: 'مجموعة جديدة',
+      price: pkgService === 'full-day' ? 1200 : 350,
+      features: [
+        { title: 'Album', items: ['30×60 cm', '5 Pages'] },
+        { title: 'Includes', items: ['Wall Frame', 'Table Frame'] },
+      ],
+      description: 'Exclusive coverage by Grooms Art.',
+      sort_order: cityPkgs.length,
+      active: true,
+      badge: 'New',
+      accent_color: '#12372a',
+      image_url: '',
+    }
+    setEditPkgForm(newPkg)
+    setEditingPkgId(newPkg.id)
   }
 
   // ─── State for Availability ───
@@ -928,14 +1370,14 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
 
       <main className="max-w-6xl mx-auto px-6 md:px-10 pt-28 pb-10">
         {/* Navigation Tabs */}
-        <div className="flex gap-1 mb-8 bg-white rounded-xl p-1 border border-charcoal/08 w-fit shadow-sm">
-          {(['bookings', 'availability', 'portfolio'] as DashboardTab[]).map((t) => (
+        <div className="flex gap-1 mb-8 bg-white rounded-xl p-1 border border-charcoal/08 w-fit shadow-sm overflow-x-auto max-w-full">
+          {(['bookings', 'availability', 'packages', 'portfolio'] as DashboardTab[]).map((t) => (
             <button
               key={t}
               type="button"
               onClick={() => setActiveTab(t)}
               className={clsx(
-                'font-sans text-xs tracking-[0.15em] uppercase px-4 py-2.5 rounded-lg transition-all duration-300',
+                'font-sans text-xs tracking-[0.15em] uppercase px-4 py-2.5 rounded-lg transition-all duration-300 whitespace-nowrap',
                 activeTab === t
                   ? 'bg-forest text-cream shadow-sm'
                   : 'text-charcoal/50 hover:text-charcoal',
@@ -945,7 +1387,9 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
                 ? `${d.bookings} (${pendingCount} ${d.pending.toLowerCase()})`
                 : t === 'availability'
                   ? d.availability
-                  : d.portfolio}
+                  : t === 'packages'
+                    ? d.packages
+                    : d.portfolio}
             </button>
           ))}
         </div>
@@ -960,6 +1404,64 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
               <StatCard label={d.baghdad} value={totalBaghdad} sub={d.bookings.toLowerCase()} />
               <StatCard label={d.erbil} value={totalErbil} sub={d.bookings.toLowerCase()} />
             </div>
+
+            {/* Task 9: Upcoming Bookings (3-Day Rolling Window) */}
+            {upcomingBookings.length > 0 && (
+              <div className="mb-8 bg-white border border-forest/20 rounded-2xl p-6 shadow-sm">
+                <div className="flex items-center justify-between gap-4 mb-4">
+                  <div className="flex items-center gap-2.5">
+                    <span className="w-2.5 h-2.5 rounded-full bg-forest animate-ping" />
+                    <h3 className="font-serif text-xl text-charcoal font-medium">
+                      {d.upcomingTitle}
+                    </h3>
+                  </div>
+                  <span className="font-sans text-[10px] tracking-wider uppercase bg-forest/10 text-forest font-semibold px-3 py-1 rounded-full">
+                    {upcomingBookings.length} {locale === 'ar' ? 'حجوزات قريبة' : 'Upcoming'}
+                  </span>
+                </div>
+                <p className="font-sans text-xs text-charcoal/55 mb-5">
+                  {d.upcomingDesc}
+                </p>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {upcomingBookings.map((ub) => (
+                    <div
+                      key={ub.id}
+                      className="border-l-4 border-forest bg-forest/[0.02] border border-charcoal/08 rounded-xl p-4 flex flex-col justify-between gap-3 hover:shadow-sm transition-all"
+                    >
+                      <div>
+                        <div className="flex items-center justify-between gap-2 mb-2">
+                          <span className="font-sans text-[9px] tracking-wider uppercase px-2 py-0.5 rounded bg-forest/10 text-forest font-semibold">
+                            {ub.type === 'full-day' ? d.fullDay : d.session}
+                          </span>
+                          <span className="font-sans text-xs text-forest font-bold">
+                            {ub.date}
+                          </span>
+                        </div>
+                        <p className="font-serif text-lg text-charcoal font-medium">{ub.customerInfo.fullName}</p>
+                        <p className="font-sans text-xs text-charcoal/60 capitalize mt-0.5">
+                          {d[ub.city as keyof typeof d] || ub.city} · {ub.packageId ? (PACKAGE_NAMES[ub.packageId] ?? ub.packageId) : '—'}
+                        </p>
+                      </div>
+
+                      <div className="pt-2 border-t border-charcoal/06 flex items-center justify-between">
+                        <a href={`tel:${ub.customerInfo.phone}`} className="font-sans text-xs text-forest underline">
+                          {ub.customerInfo.phone}
+                        </a>
+                        <span className={clsx(
+                          'font-sans text-[9px] tracking-wider uppercase px-2 py-0.5 rounded font-medium',
+                          ub.status === 'pending' && 'bg-yellow-100 text-yellow-800',
+                          ub.status === 'confirmed' && 'bg-blue-100 text-blue-800',
+                          ub.status === 'approved' && 'bg-green-100 text-green-800',
+                        )}>
+                          {d[ub.status as keyof typeof d] || ub.status}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Filter */}
             <div className="flex gap-2 mb-6 flex-wrap">
@@ -1262,6 +1764,36 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
                     })}
                   </motion.div>
                 </AnimatePresence>
+
+                {/* Calendar Legend */}
+                <div className="flex items-center justify-around px-3 py-2.5 border-t border-charcoal/06 bg-sand/20 text-[10px] font-sans text-charcoal/65">
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-full bg-forest/20 border border-forest/30 inline-block" />
+                    <span>{locale === 'ar' ? 'محظور' : 'Blocked'}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-full bg-red-500/20 border border-red-500/40 inline-block" />
+                    <span>{locale === 'ar' ? 'مكتمل الحجز' : 'Fully Booked'}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-full border border-forest/50 inline-block" />
+                    <span>{locale === 'ar' ? 'اليوم' : 'Today'}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Manual workflow explanation note (Task 8) */}
+              <div className="mb-6 bg-forest/[0.03] border border-forest/10 rounded-xl p-3.5 flex items-start gap-2.5">
+                <div className="w-4 h-4 rounded-full flex items-center justify-center bg-forest/10 text-forest flex-shrink-0 mt-0.5">
+                  <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
+                    <circle cx="6" cy="6" r="5" stroke="currentColor" strokeWidth="1.2" />
+                    <path d="M6 8V6" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+                    <circle cx="6" cy="4" r="0.6" fill="currentColor" />
+                  </svg>
+                </div>
+                <p className="font-sans text-[11px] text-charcoal/70 leading-relaxed text-left">
+                  {d.availabilityWorkflowNote}
+                </p>
               </div>
 
               <div className="border-t border-charcoal/06 pt-4">
@@ -1400,6 +1932,222 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
                 ))}
               </div>
             </div>
+          </div>
+        )}
+
+        {/* ─── TAB: PACKAGE MANAGEMENT (Task 7) ─── */}
+        {activeTab === 'packages' && (
+          <div className="space-y-8">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <h2 className="font-serif text-2xl md:text-3xl text-charcoal">{d.packagesManagement}</h2>
+                <p className="font-sans text-xs text-charcoal/50 mt-1">{d.packagesManagementDesc}</p>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleCreateNewPackage}
+                className="font-sans text-xs tracking-wider uppercase bg-forest text-cream px-5 py-3 rounded-xl hover:bg-forest-deep transition-colors self-start md:self-auto font-medium shadow-sm"
+              >
+                {d.addPackage}
+              </button>
+            </div>
+
+            {/* City & Service Selectors */}
+            <div className="flex flex-wrap items-center gap-4 bg-white border border-charcoal/10 rounded-2xl p-4 shadow-sm">
+              {/* City selector */}
+              <div className="flex items-center gap-2">
+                <span className="font-sans text-xs text-charcoal/45 font-medium uppercase tracking-wider">{d.city}:</span>
+                <div className="flex gap-1 bg-linen/50 p-1 rounded-xl">
+                  {(['baghdad', 'erbil'] as const).map((c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => setPkgCity(c)}
+                      className={clsx(
+                        'font-sans text-xs tracking-wider uppercase px-4 py-2 rounded-lg transition-all',
+                        pkgCity === c ? 'bg-forest text-cream shadow-xs font-semibold' : 'text-charcoal/60 hover:text-charcoal',
+                      )}
+                    >
+                      {d[c]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="w-px h-6 bg-charcoal/10 hidden sm:block" />
+
+              {/* Service selector */}
+              <div className="flex items-center gap-2">
+                <span className="font-sans text-xs text-charcoal/45 font-medium uppercase tracking-wider">{d.service}:</span>
+                <div className="flex gap-1 bg-linen/50 p-1 rounded-xl">
+                  {(['sessions', 'full-day'] as const).map((s) => (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => setPkgService(s)}
+                      className={clsx(
+                        'font-sans text-xs tracking-wider uppercase px-4 py-2 rounded-lg transition-all',
+                        pkgService === s ? 'bg-forest text-cream shadow-xs font-semibold' : 'text-charcoal/60 hover:text-charcoal',
+                      )}
+                    >
+                      {s === 'sessions' ? d.sessionsService : d.fullDayService}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Package Editor Cards */}
+            {pkgLoading ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {[1, 2].map((n) => (
+                  <div key={n} className="rounded-2xl border border-charcoal/10 bg-white p-6 animate-pulse h-96" />
+                ))}
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {/* New Package Inline Creator if active */}
+                {editingPkgId && editPkgForm && (
+                  <div className="bg-sand/40 border-2 border-forest rounded-2xl p-6 shadow-md space-y-5 animate-fadeIn">
+                    <div className="flex items-center justify-between border-b border-charcoal/10 pb-3">
+                      <span className="font-serif text-lg text-charcoal font-semibold">
+                        {locale === 'ar' ? 'إنشاء باقة جديدة' : 'Create New Package'}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => { setEditingPkgId(null); setEditPkgForm(null) }}
+                        className="font-sans text-xs uppercase text-charcoal/40 hover:text-charcoal"
+                      >
+                        {d.cancel}
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                      <div>
+                        <label className="font-sans text-[10px] uppercase tracking-wider text-charcoal/50 block mb-1 font-semibold">{d.nameEn}</label>
+                        <input
+                          type="text"
+                          required
+                          value={editPkgForm.name}
+                          onChange={(e) => setEditPkgForm({ ...editPkgForm, name: e.target.value })}
+                          className="w-full font-sans text-xs border border-charcoal/15 rounded-xl px-3 py-2.5 outline-none focus:border-forest bg-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="font-sans text-[10px] uppercase tracking-wider text-charcoal/50 block mb-1 font-semibold">{d.nameAr}</label>
+                        <input
+                          type="text"
+                          required
+                          value={editPkgForm.name_ar}
+                          onChange={(e) => setEditPkgForm({ ...editPkgForm, name_ar: e.target.value })}
+                          className="w-full font-sans text-xs border border-charcoal/15 rounded-xl px-3 py-2.5 outline-none focus:border-forest bg-white text-right"
+                        />
+                      </div>
+                      <div>
+                        <label className="font-sans text-[10px] uppercase tracking-wider text-charcoal/50 block mb-1 font-semibold">{d.priceUsd}</label>
+                        <input
+                          type="number"
+                          required
+                          value={editPkgForm.price}
+                          onChange={(e) => setEditPkgForm({ ...editPkgForm, price: Number(e.target.value) })}
+                          className="w-full font-sans text-xs border border-charcoal/15 rounded-xl px-3 py-2.5 outline-none focus:border-forest bg-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="font-sans text-[10px] uppercase tracking-wider text-charcoal/50 block mb-1 font-semibold">{d.packageKey}</label>
+                        <input
+                          type="text"
+                          required
+                          value={editPkgForm.package_key}
+                          onChange={(e) => setEditPkgForm({ ...editPkgForm, package_key: e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, '') })}
+                          className="w-full font-sans text-xs border border-charcoal/15 rounded-xl px-3 py-2.5 outline-none focus:border-forest bg-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="font-sans text-[10px] uppercase tracking-wider text-charcoal/50 block mb-1 font-semibold">{d.badgeOptional}</label>
+                        <input
+                          type="text"
+                          value={editPkgForm.badge || ''}
+                          onChange={(e) => setEditPkgForm({ ...editPkgForm, badge: e.target.value })}
+                          placeholder="e.g. Most Popular"
+                          className="w-full font-sans text-xs border border-charcoal/15 rounded-xl px-3 py-2.5 outline-none focus:border-forest bg-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="font-sans text-[10px] uppercase tracking-wider text-charcoal/50 block mb-1 font-semibold">{d.accentColorOptional}</label>
+                        <input
+                          type="text"
+                          value={editPkgForm.accent_color || ''}
+                          onChange={(e) => setEditPkgForm({ ...editPkgForm, accent_color: e.target.value })}
+                          placeholder="#12372a"
+                          className="w-full font-sans text-xs border border-charcoal/15 rounded-xl px-3 py-2.5 outline-none focus:border-forest bg-white"
+                        />
+                      </div>
+                      <div className="sm:col-span-2 lg:col-span-3">
+                        <label className="font-sans text-[10px] uppercase tracking-wider text-charcoal/50 block mb-1 font-semibold">{d.descEn}</label>
+                        <textarea
+                          value={editPkgForm.description || ''}
+                          onChange={(e) => setEditPkgForm({ ...editPkgForm, description: e.target.value })}
+                          rows={2}
+                          className="w-full font-sans text-xs border border-charcoal/15 rounded-xl px-3 py-2 outline-none focus:border-forest bg-white resize-none"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end gap-3 pt-2">
+                      <button
+                        type="button"
+                        onClick={() => { setEditingPkgId(null); setEditPkgForm(null) }}
+                        className="font-sans text-xs uppercase px-4 py-2.5 rounded-lg border border-charcoal/20 text-charcoal/60"
+                      >
+                        {d.cancel}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleSavePackage(editPkgForm)}
+                        className="font-sans text-xs tracking-wider uppercase bg-forest text-cream px-6 py-2.5 rounded-lg font-medium shadow-sm hover:bg-forest-deep transition-colors"
+                      >
+                        {d.savePackage}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* List of existing packages */}
+                {packagesList
+                  .filter((p) => p.city === pkgCity && p.service === pkgService)
+                  .sort((a, b) => a.sort_order - b.sort_order)
+                  .map((pkg) => (
+                    <PackageEditorCard
+                      key={pkg.id}
+                      pkg={pkg}
+                      d={d}
+                      locale={locale}
+                      onSave={handleSavePackage}
+                      onDelete={handleDeletePackage}
+                      onMoveUp={() => handleMoveOrder(pkg, 'up')}
+                      onMoveDown={() => handleMoveOrder(pkg, 'down')}
+                      isSaved={pkgSaveMessage === pkg.id}
+                    />
+                  ))}
+
+                {packagesList.filter((p) => p.city === pkgCity && p.service === pkgService).length === 0 && !editingPkgId && (
+                  <div className="bg-white border border-charcoal/10 rounded-2xl p-12 text-center">
+                    <p className="font-serif text-xl text-charcoal/40 mb-3">
+                      {locale === 'ar' ? 'لا توجد باقات مدخلة لهذه المدينة والخدمة بعد.' : 'No packages found for this city and service.'}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={handleCreateNewPackage}
+                      className="font-sans text-xs tracking-wider uppercase bg-forest text-cream px-5 py-2.5 rounded-xl font-medium shadow-sm"
+                    >
+                      {d.addPackage}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 

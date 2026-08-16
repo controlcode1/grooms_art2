@@ -107,7 +107,7 @@ function RootComponent() {
     <RootDocument>
       <I18nProvider>
         {!isDashboard && <Navbar />}
-        <main className="min-h-screen bg-sand">
+        <main className="min-h-screen bg-[#FAFAF7]">
           <Outlet />
         </main>
         {!hideFooter && <Footer />}

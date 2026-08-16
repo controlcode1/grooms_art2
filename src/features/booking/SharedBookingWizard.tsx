@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'motion/react'
 import { clsx } from 'clsx'
 import { useI18n } from '@/lib/i18n'
 import { Section } from '@/features/shared/components/Section'
+import { PageHero } from '@/features/shared/components/PageHero'
 import { CityStep } from '@/features/sessions/components/CityStep'
 import { LocationStep } from '@/features/sessions/components/LocationStep'
 import { SessionDateStep } from '@/features/sessions/components/SessionDateStep'
@@ -28,6 +29,10 @@ interface SharedBookingWizardProps {
   /** Success message content override if any */
   successTitle?: string
   successBody?: string
+  /** Hero configuration for when city is chosen */
+  heroImage?: string
+  heroTitle?: string
+  heroSubtitle?: string
 }
 
 const STEP_LABELS_EN: Record<Step, string> = {
@@ -65,6 +70,9 @@ export function SharedBookingWizard({
   packageNames,
   successTitle,
   successBody,
+  heroImage,
+  heroTitle,
+  heroSubtitle,
 }: SharedBookingWizardProps) {
   const { t, locale } = useI18n()
   const [stepIndex, setStepIndex] = useState(0)
@@ -193,53 +201,58 @@ export function SharedBookingWizard({
     )
   }
 
+  // Simplified and elegant success screen (Task 6)
   const content = success ? (
     <motion.div
-      initial={{ opacity: 0, y: 10 }}
+      initial={{ opacity: 0, y: 14 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
-      className="max-w-md space-y-6"
+      className="max-w-lg mx-auto space-y-6 text-center"
     >
-      <div className="flex flex-col items-start text-start">
+      <div className="flex flex-col items-center">
         <motion.div
-          initial={{ scale: 0.85, opacity: 0 }}
+          initial={{ scale: 0.8, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
-          transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-          className="w-12 h-12 rounded-full bg-forest text-cream flex items-center justify-center mb-4"
+          transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+          className="w-14 h-14 rounded-full bg-forest text-cream flex items-center justify-center mb-5 shadow-lg"
         >
-          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-            <path d="M4 10.5L8 14.5L16 6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+          <svg width="24" height="24" viewBox="0 0 20 20" fill="none">
+            <path d="M4 10.5L8 14.5L16 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </motion.div>
-        <h2 className="font-serif text-2xl md:text-3xl text-charcoal mb-2">
-          {successTitle || t.sessions.successTitle}
+
+        <h2 className="font-serif text-2xl sm:text-3xl md:text-4xl text-charcoal mb-3">
+          {locale === 'ar' ? 'تم إرسال طلب الحجز بنجاح' : 'Booking Submitted Successfully'}
         </h2>
-        <p className="font-sans text-sm text-charcoal/60 leading-relaxed">
-          {successBody || t.sessions.successBody}
+
+        <p className="font-sans text-sm text-charcoal/70 leading-relaxed max-w-md mb-2">
+          {locale === 'ar'
+            ? 'تم استلام طلب حجزكِ بنجاح. سيقوم فريقنا بمراجعة التفاصيل والتواصل معكِ خلال 48 ساعة.'
+            : 'Your booking request has been received successfully. Our team will review your request and contact you within 48 hours.'}
+        </p>
+
+        <p className="font-serif italic text-base text-forest mt-1">
+          {locale === 'ar' ? 'شكراً لاختياركم Grooms Art.' : 'Thank you for choosing Grooms Art.'}
         </p>
       </div>
 
-      {/* Welcoming Card in Grooms Art Theme */}
-      <div className="bg-linen/40 border border-charcoal/10 rounded-2xl p-6 space-y-4 shadow-sm text-start">
-        <p className="font-serif italic text-[15px] text-charcoal leading-relaxed">
-          {locale === 'ar' 
-            ? '« أهلاً بكِ في استوديو Grooms Art. نحن هنا لا لنلتقط مجرد صور، بل لنروي قصتكم بصدق ودفء، مسترشدين بالضوء الطبيعي واللحظات العفوية. »' 
-            : '“Welcome to Grooms Art Studio. We are not here to merely take photos; we are here to honestly tell your story, guided by natural light and the quiet seconds in between.”'}
-        </p>
-        <div className="divider-hairline" />
-        <div className="space-y-2 font-sans text-xs text-charcoal/70">
-          <div className="flex justify-between items-center">
-            <span className="font-medium text-charcoal/50 uppercase tracking-wider">{locale === 'ar' ? 'الاسم:' : 'Name:'}</span>
-            <span className="text-charcoal font-medium">{state.customerInfo.fullName}</span>
-          </div>
-          <div className="flex justify-between items-center">
-            <span className="font-medium text-charcoal/50 uppercase tracking-wider">{locale === 'ar' ? 'التاريخ:' : 'Date:'}</span>
-            <span className="text-charcoal font-medium">{state.date}</span>
-          </div>
-          <div className="flex justify-between items-center">
-            <span className="font-medium text-charcoal/50 uppercase tracking-wider">{locale === 'ar' ? 'الباقة:' : 'Package:'}</span>
-            <span className="text-charcoal font-medium">{state.packageId ? packageNames[state.packageId] ?? state.packageId : '—'}</span>
-          </div>
+      {/* Booking Summary Box */}
+      <div className="bg-white border border-charcoal/10 rounded-2xl p-5 shadow-sm text-left divide-y divide-charcoal/06">
+        <div className="flex justify-between items-center py-2.5 font-sans text-xs">
+          <span className="font-medium text-charcoal/45 uppercase tracking-wider">{locale === 'ar' ? 'الاسم' : 'Name'}</span>
+          <span className="text-charcoal font-semibold text-sm">{state.customerInfo.fullName}</span>
+        </div>
+        <div className="flex justify-between items-center py-2.5 font-sans text-xs">
+          <span className="font-medium text-charcoal/45 uppercase tracking-wider">{locale === 'ar' ? 'المدينة' : 'City'}</span>
+          <span className="text-charcoal font-medium capitalize">{state.city === 'baghdad' ? (locale === 'ar' ? 'بغداد' : 'Baghdad') : (locale === 'ar' ? 'أربيل' : 'Erbil')}</span>
+        </div>
+        <div className="flex justify-between items-center py-2.5 font-sans text-xs">
+          <span className="font-medium text-charcoal/45 uppercase tracking-wider">{locale === 'ar' ? 'التاريخ' : 'Date'}</span>
+          <span className="text-forest font-semibold">{state.date}</span>
+        </div>
+        <div className="flex justify-between items-center py-2.5 font-sans text-xs">
+          <span className="font-medium text-charcoal/45 uppercase tracking-wider">{locale === 'ar' ? 'الباقة' : 'Package'}</span>
+          <span className="text-charcoal font-medium">{state.packageId ? packageNames[state.packageId] ?? state.packageId : '—'}</span>
         </div>
       </div>
     </motion.div>
@@ -290,7 +303,7 @@ export function SharedBookingWizard({
                 {t.sessions.confirmBody}
               </p>
 
-              <div className="max-w-md rounded-xl overflow-hidden border border-charcoal/15 divide-y divide-charcoal/10 mb-8">
+              <div className="max-w-md rounded-xl overflow-hidden border border-charcoal/15 divide-y divide-charcoal/10 mb-8 bg-white">
                 <SummaryRow
                   label="City"
                   value={
@@ -348,13 +361,28 @@ export function SharedBookingWizard({
     </>
   )
 
+  const defaultHeroTitle =
+    heroTitle ||
+    (type === 'full-day'
+      ? (locale === 'ar' ? 'اليوم الكامل' : 'The Full Day')
+      : (locale === 'ar' ? 'الجلسات' : 'Sessions'))
+
+  const defaultHeroSubtitle =
+    heroSubtitle ||
+    (type === 'full-day'
+      ? (locale === 'ar' ? 'تجربة توثيق فوتوغرافية وسينمائية شاملة' : 'Complete Wedding Photography & Film Experience')
+      : (locale === 'ar' ? 'جلسات تصوير توثيقية حصرية' : 'Exclusive Editorial Photography Sessions'))
+
   return (
-    <Section
-      className={clsx(
-        type === 'full-day' ? 'py-20 md:py-28' : 'pt-32 pb-24 md:pt-40 md:pb-32'
-      )}
-    >
-      {content}
-    </Section>
+    <>
+      <PageHero
+        title={defaultHeroTitle}
+        subtitle={defaultHeroSubtitle}
+        image={heroImage || '/images/fullday-bg.jpg'}
+      />
+      <Section className="py-12 md:py-20">
+        {content}
+      </Section>
+    </>
   )
 }
