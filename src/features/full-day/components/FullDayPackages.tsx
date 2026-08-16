@@ -3,7 +3,14 @@ import { motion, AnimatePresence } from 'motion/react'
 import { clsx } from 'clsx'
 import { useI18n } from '@/lib/i18n'
 import { SharedBookingWizard } from '@/features/booking/SharedBookingWizard'
-import { loadPackages, type Package } from '@/lib/data/packages'
+import {
+  loadPackages,
+  getPackageDisplayName,
+  getPackageDisplayDescription,
+  getPackageDisplayBadge,
+  getPackageDisplayFeatures,
+  type Package,
+} from '@/lib/data/packages'
 
 const PACKAGE_NAMES: Record<string, string> = {
   vip: 'VIP Collection',
@@ -15,14 +22,6 @@ export function FullDayPackages() {
   const [packages, setPackages] = useState<Package[]>([])
   const [loading, setLoading] = useState(true)
   const [activeModalPkg, setActiveModalPkg] = useState<Package | null>(null)
-
-  const fetchFullDayPackages = (city: string | null) => {
-    setLoading(true)
-    loadPackages(city || 'baghdad', 'full-day').then((data) => {
-      setPackages(data)
-      setLoading(false)
-    })
-  }
 
   return (
     <SharedBookingWizard
@@ -147,7 +146,10 @@ function FullDayStepInner({
         <div className="hidden md:grid grid-cols-2 gap-8 max-w-5xl mx-auto">
           {packages.map((pkg, i) => {
             const isSelected = selected === pkg.package_key
-            const name = locale === 'ar' && pkg.name_ar ? pkg.name_ar : pkg.name
+            const name = getPackageDisplayName(pkg, locale)
+            const desc = getPackageDisplayDescription(pkg, locale)
+            const badge = getPackageDisplayBadge(pkg, locale) || (locale === 'ar' ? 'تغطية اليوم الكامل' : 'Full Day Coverage')
+            const featureGroups = getPackageDisplayFeatures(pkg, locale)
 
             return (
               <motion.button
@@ -171,9 +173,7 @@ function FullDayStepInner({
                 <div className="mb-6">
                   <div className="flex items-center justify-between gap-3 mb-4">
                     <span className="inline-flex items-center font-sans text-[10px] tracking-[0.22em] uppercase px-3.5 py-1.5 rounded-full bg-white border border-charcoal/10 text-charcoal/80 font-semibold shadow-xs">
-                      {locale === 'ar' && pkg.badge_ar
-                        ? pkg.badge_ar
-                        : pkg.badge || (locale === 'ar' ? 'تغطية اليوم الكامل' : 'Full Day Coverage')}
+                      {badge}
                     </span>
 
                     {isSelected && (
@@ -197,36 +197,32 @@ function FullDayStepInner({
                     <span className="font-sans text-[11px] uppercase tracking-wider text-charcoal/40">USD</span>
                   </div>
 
-                  {pkg.description || pkg.description_ar ? (
+                  {desc && (
                     <p className="font-sans text-xs text-charcoal/60 mt-3 leading-relaxed">
-                      {locale === 'ar' && pkg.description_ar ? pkg.description_ar : pkg.description}
+                      {desc}
                     </p>
-                  ) : null}
+                  )}
                 </div>
 
                 <div className="divider-hairline mb-6" />
 
                 {/* Features Group */}
                 <div className="space-y-5 mb-8 flex-1">
-                {Array.isArray(pkg.features) && pkg.features.map((group, gIdx) => {
-                    const groupTitle = locale === 'ar' && group.title_ar ? group.title_ar : group.title
-                    const groupItems = locale === 'ar' && group.items_ar?.length ? group.items_ar : group.items
-                    return (
-                      <div key={gIdx}>
-                        <p className="font-sans text-[10px] tracking-[0.22em] uppercase text-charcoal/45 mb-2.5 font-semibold">
-                          {groupTitle}
-                        </p>
-                        <ul className="space-y-2">
-                          {groupItems?.map((item, itemIdx) => (
-                            <li key={itemIdx} className="flex gap-2.5 font-sans text-xs text-charcoal/75 leading-relaxed">
-                              <span className="text-forest/80 font-bold mt-0.5">—</span>
-                              <span>{item}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )
-                  })}
+                  {featureGroups.map((group, gIdx) => (
+                    <div key={gIdx}>
+                      <p className="font-sans text-[10px] tracking-[0.22em] uppercase text-charcoal/45 mb-2.5 font-semibold">
+                        {group.title}
+                      </p>
+                      <ul className="space-y-2">
+                        {group.items.map((item, itemIdx) => (
+                          <li key={itemIdx} className="flex gap-2.5 font-sans text-xs text-charcoal/75 leading-relaxed">
+                            <span className="text-forest/80 font-bold mt-0.5">—</span>
+                            <span>{item}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ))}
                 </div>
 
                 {/* CTA Button */}
@@ -251,7 +247,8 @@ function FullDayStepInner({
         <div className="grid grid-cols-1 gap-4 md:hidden">
           {packages.map((pkg) => {
             const isSelected = selected === pkg.package_key
-            const name = locale === 'ar' && pkg.name_ar ? pkg.name_ar : pkg.name
+            const name = getPackageDisplayName(pkg, locale)
+            const badge = getPackageDisplayBadge(pkg, locale) || (locale === 'ar' ? 'تغطية اليوم الكامل' : 'Full Day')
 
             return (
               <div
@@ -266,9 +263,7 @@ function FullDayStepInner({
                 {/* White pill badge */}
                 <div className="mb-3">
                   <span className="inline-block font-sans text-[9px] tracking-[0.2em] uppercase px-3 py-1 rounded-full bg-sand border border-charcoal/10 text-charcoal/70 font-semibold">
-                    {locale === 'ar' && pkg.badge_ar
-                      ? pkg.badge_ar
-                      : pkg.badge || (locale === 'ar' ? 'تغطية اليوم الكامل' : 'Full Day')}
+                    {badge}
                   </span>
                 </div>
 
@@ -316,72 +311,77 @@ function FullDayStepInner({
               exit={{ opacity: 0, scale: 0.95 }}
               className="bg-[#FAFAF7] w-full max-w-md rounded-3xl p-6 shadow-2xl border border-charcoal/10 max-h-[85vh] overflow-y-auto flex flex-col text-left"
             >
-              <div className="flex justify-between items-start mb-4">
-                <div>
-                  <span className="inline-block font-sans text-[9px] tracking-[0.2em] uppercase px-3 py-1 rounded-full bg-white border border-charcoal/10 text-charcoal/70 font-semibold mb-2 shadow-xs">
-                    {locale === 'ar' && activeModalPkg.badge_ar
-                      ? activeModalPkg.badge_ar
-                      : activeModalPkg.badge || (locale === 'ar' ? 'تغطية اليوم الكامل' : 'Full Day')}
-                  </span>
-                  <h3 className="font-serif text-2xl text-charcoal font-medium">
-                    {locale === 'ar' && activeModalPkg.name_ar ? activeModalPkg.name_ar : activeModalPkg.name}
-                  </h3>
-                  <p className="font-serif text-3xl text-forest mt-1 font-normal">
-                    ${activeModalPkg.price.toLocaleString()}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setActiveModalPkg(null)}
-                  className="w-8 h-8 rounded-full flex items-center justify-center text-charcoal/50 hover:bg-charcoal/05 text-sm"
-                  aria-label="Close modal"
-                >
-                  ✕
-                </button>
-              </div>
+              {(() => {
+                const name = getPackageDisplayName(activeModalPkg, locale)
+                const desc = getPackageDisplayDescription(activeModalPkg, locale)
+                const badge = getPackageDisplayBadge(activeModalPkg, locale) || (locale === 'ar' ? 'تغطية اليوم الكامل' : 'Full Day')
+                const featureGroups = getPackageDisplayFeatures(activeModalPkg, locale)
 
-              {(activeModalPkg.description || activeModalPkg.description_ar) && (
-                <p className="font-sans text-xs text-charcoal/60 mb-4 leading-relaxed">
-                  {locale === 'ar' && activeModalPkg.description_ar ? activeModalPkg.description_ar : activeModalPkg.description}
-                </p>
-              )}
-
-              <div className="divider-hairline mb-5" />
-
-              <div className="space-y-5 flex-1 overflow-y-auto mb-6 pr-1">
-                {Array.isArray(activeModalPkg.features) && activeModalPkg.features.map((group, gIdx) => {
-                  const groupTitle = locale === 'ar' && group.title_ar ? group.title_ar : group.title
-                  const groupItems = locale === 'ar' && group.items_ar?.length ? group.items_ar : group.items
-                  return (
-                    <div key={gIdx}>
-                      <p className="font-sans text-[10px] tracking-[0.22em] uppercase text-charcoal/45 mb-2 font-semibold">
-                        {groupTitle}
-                      </p>
-                      <ul className="space-y-1.5">
-                        {groupItems?.map((item, itemIdx) => (
-                          <li key={itemIdx} className="flex gap-2 font-sans text-xs text-charcoal/75 leading-relaxed">
-                            <span className="text-forest/80 font-bold">—</span>
-                            <span>{item}</span>
-                          </li>
-                        ))}
-                      </ul>
+                return (
+                  <>
+                    <div className="flex justify-between items-start mb-4">
+                      <div>
+                        <span className="inline-block font-sans text-[9px] tracking-[0.2em] uppercase px-3 py-1 rounded-full bg-white border border-charcoal/10 text-charcoal/70 font-semibold mb-2 shadow-xs">
+                          {badge}
+                        </span>
+                        <h3 className="font-serif text-2xl text-charcoal font-medium">
+                          {name}
+                        </h3>
+                        <p className="font-serif text-3xl text-forest mt-1 font-normal">
+                          ${activeModalPkg.price.toLocaleString()}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setActiveModalPkg(null)}
+                        className="w-8 h-8 rounded-full flex items-center justify-center text-charcoal/50 hover:bg-charcoal/05 text-sm"
+                        aria-label="Close modal"
+                      >
+                        ✕
+                      </button>
                     </div>
-                  )
-                })}
-              </div>
 
-              <button
-                type="button"
-                onClick={() => {
-                  onSelect(activeModalPkg.package_key)
-                  setActiveModalPkg(null)
-                }}
-                className="w-full text-center font-sans text-xs tracking-[0.18em] uppercase py-3.5 rounded-xl bg-forest text-cream border border-forest hover:bg-forest-deep transition-colors font-medium shadow-sm"
-              >
-                {selected === activeModalPkg.package_key
-                  ? (locale === 'ar' ? 'المجموعة مختارة بالفعل' : 'Collection Already Selected')
-                  : (locale === 'ar' ? 'اختيار هذه المجموعة' : 'Select this Collection')}
-              </button>
+                    {desc && (
+                      <p className="font-sans text-xs text-charcoal/60 mb-4 leading-relaxed">
+                        {desc}
+                      </p>
+                    )}
+
+                    <div className="divider-hairline mb-5" />
+
+                    <div className="space-y-5 flex-1 overflow-y-auto mb-6 pr-1">
+                      {featureGroups.map((group, gIdx) => (
+                        <div key={gIdx}>
+                          <p className="font-sans text-[10px] tracking-[0.22em] uppercase text-charcoal/45 mb-2 font-semibold">
+                            {group.title}
+                          </p>
+                          <ul className="space-y-1.5">
+                            {group.items.map((item, itemIdx) => (
+                              <li key={itemIdx} className="flex gap-2 font-sans text-xs text-charcoal/75 leading-relaxed">
+                                <span className="text-forest/80 font-bold">—</span>
+                                <span>{item}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      ))}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onSelect(activeModalPkg.package_key)
+                        setActiveModalPkg(null)
+                      }}
+                      className="w-full text-center font-sans text-xs tracking-[0.18em] uppercase py-3.5 rounded-xl bg-forest text-cream border border-forest hover:bg-forest-deep transition-colors font-medium shadow-sm"
+                    >
+                      {selected === activeModalPkg.package_key
+                        ? (locale === 'ar' ? 'المجموعة مختارة بالفعل' : 'Collection Already Selected')
+                        : (locale === 'ar' ? 'اختيار هذه المجموعة' : 'Select this Collection')}
+                    </button>
+                  </>
+                )
+              })()}
             </motion.div>
           </div>
         )}

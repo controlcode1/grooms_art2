@@ -2,7 +2,14 @@ import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
 import { clsx } from 'clsx'
 import { useI18n } from '@/lib/i18n'
-import { loadPackages, type Package } from '@/lib/data/packages'
+import {
+  loadPackages,
+  getPackageDisplayName,
+  getPackageDisplayDescription,
+  getPackageDisplayBadge,
+  getPackageDisplayFeatures,
+  type Package,
+} from '@/lib/data/packages'
 
 interface SessionPackageStepProps {
   selected: string | null
@@ -85,7 +92,10 @@ export function SessionPackageStep({ selected, city, onSelect }: SessionPackageS
         <div className="hidden md:grid grid-cols-3 gap-6">
           {packages.map((pkg, i) => {
             const isSelected = selected === pkg.package_key
-            const name = locale === 'ar' && pkg.name_ar ? pkg.name_ar : pkg.name
+            const name = getPackageDisplayName(pkg, locale)
+            const desc = getPackageDisplayDescription(pkg, locale)
+            const badge = getPackageDisplayBadge(pkg, locale)
+            const featureGroups = getPackageDisplayFeatures(pkg, locale)
 
             return (
               <motion.button
@@ -107,9 +117,9 @@ export function SessionPackageStep({ selected, city, onSelect }: SessionPackageS
               >
                 <div>
                   {/* Badge pill */}
-                  {pkg.badge && (
+                  {badge && (
                     <span className="inline-block font-sans text-[9px] tracking-[0.2em] uppercase px-3 py-1 rounded-full bg-forest text-cream font-semibold mb-3">
-                      {locale === 'ar' && pkg.badge_ar ? pkg.badge_ar : pkg.badge}
+                      {badge}
                     </span>
                   )}
 
@@ -118,33 +128,29 @@ export function SessionPackageStep({ selected, city, onSelect }: SessionPackageS
                     ${pkg.price.toLocaleString()}
                   </p>
 
-                  {(pkg.description || pkg.description_ar) && (
+                  {desc && (
                     <p className="font-sans text-xs text-charcoal/60 mb-4 leading-relaxed">
-                      {locale === 'ar' && pkg.description_ar ? pkg.description_ar : pkg.description}
+                      {desc}
                     </p>
                   )}
 
                   <div className="divider-hairline mb-5" />
 
-                  {Array.isArray(pkg.features) && pkg.features.map((group, gIdx) => {
-                    const groupTitle = locale === 'ar' && group.title_ar ? group.title_ar : group.title
-                    const groupItems = locale === 'ar' && group.items_ar?.length ? group.items_ar : group.items
-                    return (
-                      <div key={gIdx} className="mb-4">
-                        <p className="font-sans text-[10px] tracking-[0.22em] uppercase text-charcoal/40 mb-2 font-semibold">
-                          {groupTitle}
-                        </p>
-                        <ul className="space-y-1.5">
-                          {groupItems?.map((item, itemIdx) => (
-                            <li key={itemIdx} className="flex gap-2 font-sans text-xs text-charcoal/70">
-                              <span className="text-forest/70 font-bold">—</span>
-                              <span>{item}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )
-                  })}
+                  {featureGroups.map((group, gIdx) => (
+                    <div key={gIdx} className="mb-4">
+                      <p className="font-sans text-[10px] tracking-[0.22em] uppercase text-charcoal/40 mb-2 font-semibold">
+                        {group.title}
+                      </p>
+                      <ul className="space-y-1.5">
+                        {group.items.map((item, itemIdx) => (
+                          <li key={itemIdx} className="flex gap-2 font-sans text-xs text-charcoal/70">
+                            <span className="text-forest/70 font-bold">—</span>
+                            <span>{item}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ))}
                 </div>
 
                 <div
@@ -168,7 +174,8 @@ export function SessionPackageStep({ selected, city, onSelect }: SessionPackageS
         <div className="grid grid-cols-1 gap-4 md:hidden">
           {packages.map((pkg) => {
             const isSelected = selected === pkg.package_key
-            const name = locale === 'ar' && pkg.name_ar ? pkg.name_ar : pkg.name
+            const name = getPackageDisplayName(pkg, locale)
+            const badge = getPackageDisplayBadge(pkg, locale)
 
             return (
               <div
@@ -180,9 +187,9 @@ export function SessionPackageStep({ selected, city, onSelect }: SessionPackageS
                     : 'border-charcoal/15 shadow-sm',
                 )}
               >
-                {pkg.badge && (
+                {badge && (
                   <span className="inline-block font-sans text-[8px] tracking-[0.2em] uppercase px-2.5 py-0.5 rounded-full bg-forest/10 text-forest font-semibold mb-2 self-start">
-                    {locale === 'ar' && pkg.badge_ar ? pkg.badge_ar : pkg.badge}
+                    {badge}
                   </span>
                 )}
 
@@ -228,72 +235,79 @@ export function SessionPackageStep({ selected, city, onSelect }: SessionPackageS
               exit={{ opacity: 0, scale: 0.95 }}
               className="bg-[#FAFAF7] w-full max-w-md rounded-2xl p-6 shadow-2xl border border-charcoal/10 max-h-[85vh] overflow-y-auto flex flex-col text-left"
             >
-              <div className="flex justify-between items-start mb-4">
-                <div>
-                  {activeModalPkg.badge && (
-                    <span className="inline-block font-sans text-[8px] tracking-[0.2em] uppercase px-2.5 py-0.5 rounded-full bg-forest text-cream font-semibold mb-2">
-                      {locale === 'ar' && activeModalPkg.badge_ar ? activeModalPkg.badge_ar : activeModalPkg.badge}
-                    </span>
-                  )}
-                  <h3 className="font-serif text-2xl text-charcoal font-medium">
-                    {locale === 'ar' && activeModalPkg.name_ar ? activeModalPkg.name_ar : activeModalPkg.name}
-                  </h3>
-                  <p className="font-serif text-3xl text-forest mt-1">
-                    ${activeModalPkg.price.toLocaleString()}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setActiveModalPkg(null)}
-                  className="w-8 h-8 rounded-full flex items-center justify-center text-charcoal/50 hover:bg-charcoal/05 text-sm"
-                  aria-label="Close modal"
-                >
-                  ✕
-                </button>
-              </div>
+              {(() => {
+                const name = getPackageDisplayName(activeModalPkg, locale)
+                const desc = getPackageDisplayDescription(activeModalPkg, locale)
+                const badge = getPackageDisplayBadge(activeModalPkg, locale)
+                const featureGroups = getPackageDisplayFeatures(activeModalPkg, locale)
 
-              {(activeModalPkg.description || activeModalPkg.description_ar) && (
-                <p className="font-sans text-xs text-charcoal/60 mb-4 leading-relaxed">
-                  {locale === 'ar' && activeModalPkg.description_ar ? activeModalPkg.description_ar : activeModalPkg.description}
-                </p>
-              )}
-
-              <div className="divider-hairline mb-5" />
-
-              <div className="space-y-4 flex-1 overflow-y-auto mb-6 pr-1">
-                {Array.isArray(activeModalPkg.features) && activeModalPkg.features.map((group, gIdx) => {
-                  const groupTitle = locale === 'ar' && group.title_ar ? group.title_ar : group.title
-                  const groupItems = locale === 'ar' && group.items_ar?.length ? group.items_ar : group.items
-                  return (
-                    <div key={gIdx}>
-                      <p className="font-sans text-[10px] tracking-[0.22em] uppercase text-charcoal/40 mb-2 font-semibold">
-                        {groupTitle}
-                      </p>
-                      <ul className="space-y-1.5">
-                        {groupItems?.map((item, itemIdx) => (
-                          <li key={itemIdx} className="flex gap-2 font-sans text-xs text-charcoal/75">
-                            <span className="text-forest/70 font-bold">—</span>
-                            <span>{item}</span>
-                          </li>
-                        ))}
-                      </ul>
+                return (
+                  <>
+                    <div className="flex justify-between items-start mb-4">
+                      <div>
+                        {badge && (
+                          <span className="inline-block font-sans text-[8px] tracking-[0.2em] uppercase px-2.5 py-0.5 rounded-full bg-forest text-cream font-semibold mb-2">
+                            {badge}
+                          </span>
+                        )}
+                        <h3 className="font-serif text-2xl text-charcoal font-medium">
+                          {name}
+                        </h3>
+                        <p className="font-serif text-3xl text-forest mt-1">
+                          ${activeModalPkg.price.toLocaleString()}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setActiveModalPkg(null)}
+                        className="w-8 h-8 rounded-full flex items-center justify-center text-charcoal/50 hover:bg-charcoal/05 text-sm"
+                        aria-label="Close modal"
+                      >
+                        ✕
+                      </button>
                     </div>
-                  )
-                })}
-              </div>
 
-              <button
-                type="button"
-                onClick={() => {
-                  onSelect(activeModalPkg.package_key)
-                  setActiveModalPkg(null)
-                }}
-                className="w-full text-center font-sans text-xs tracking-[0.18em] uppercase py-3.5 rounded-xl bg-forest text-cream border border-forest hover:bg-forest-deep transition-colors font-medium shadow-sm"
-              >
-                {selected === activeModalPkg.package_key
-                  ? (locale === 'ar' ? 'الباقة مختارة بالفعل' : 'Package Already Selected')
-                  : (locale === 'ar' ? 'اختيار هذه الباقة' : 'Select this Package')}
-              </button>
+                    {desc && (
+                      <p className="font-sans text-xs text-charcoal/60 mb-4 leading-relaxed">
+                        {desc}
+                      </p>
+                    )}
+
+                    <div className="divider-hairline mb-5" />
+
+                    <div className="space-y-4 flex-1 overflow-y-auto mb-6 pr-1">
+                      {featureGroups.map((group, gIdx) => (
+                        <div key={gIdx}>
+                          <p className="font-sans text-[10px] tracking-[0.22em] uppercase text-charcoal/40 mb-2 font-semibold">
+                            {group.title}
+                          </p>
+                          <ul className="space-y-1.5">
+                            {group.items.map((item, itemIdx) => (
+                              <li key={itemIdx} className="flex gap-2 font-sans text-xs text-charcoal/75">
+                                <span className="text-forest/70 font-bold">—</span>
+                                <span>{item}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      ))}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onSelect(activeModalPkg.package_key)
+                        setActiveModalPkg(null)
+                      }}
+                      className="w-full text-center font-sans text-xs tracking-[0.18em] uppercase py-3.5 rounded-xl bg-forest text-cream border border-forest hover:bg-forest-deep transition-colors font-medium shadow-sm"
+                    >
+                      {selected === activeModalPkg.package_key
+                        ? (locale === 'ar' ? 'الباقة مختارة بالفعل' : 'Package Already Selected')
+                        : (locale === 'ar' ? 'اختيار هذه الباقة' : 'Select this Package')}
+                    </button>
+                  </>
+                )
+              })()}
             </motion.div>
           </div>
         )}

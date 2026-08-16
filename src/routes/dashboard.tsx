@@ -178,6 +178,12 @@ function PackageEditorCard({
     setFormData({ ...formData, features: updatedFeatures })
   }
 
+  const handleFeatureTitleArChange = (gIdx: number, newTitleAr: string) => {
+    const updatedFeatures = [...(formData.features || [])]
+    updatedFeatures[gIdx] = { ...updatedFeatures[gIdx], title_ar: newTitleAr }
+    setFormData({ ...formData, features: updatedFeatures })
+  }
+
   const handleFeatureItemsTextChange = (gIdx: number, text: string) => {
     const items = text.split('\n').map((l) => l.trim()).filter(Boolean)
     const updatedFeatures = [...(formData.features || [])]
@@ -185,8 +191,18 @@ function PackageEditorCard({
     setFormData({ ...formData, features: updatedFeatures })
   }
 
+  const handleFeatureItemsArTextChange = (gIdx: number, text: string) => {
+    const items_ar = text.split('\n').map((l) => l.trim()).filter(Boolean)
+    const updatedFeatures = [...(formData.features || [])]
+    updatedFeatures[gIdx] = { ...updatedFeatures[gIdx], items_ar }
+    setFormData({ ...formData, features: updatedFeatures })
+  }
+
   const handleAddFeatureSection = () => {
-    const updatedFeatures = [...(formData.features || []), { title: 'New Section', items: ['Feature 1'] }]
+    const updatedFeatures = [
+      ...(formData.features || []),
+      { title: 'New Section', title_ar: 'قسم جديد', items: ['Feature 1'], items_ar: ['ميزة 1'] },
+    ]
     setFormData({ ...formData, features: updatedFeatures })
   }
 
@@ -254,7 +270,7 @@ function PackageEditorCard({
       </div>
 
       {/* Main Form Fields */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div>
           <label className="font-sans text-[10px] uppercase tracking-wider text-charcoal/45 block mb-1 font-semibold">
             {d.nameEn}
@@ -293,7 +309,19 @@ function PackageEditorCard({
 
         <div>
           <label className="font-sans text-[10px] uppercase tracking-wider text-charcoal/45 block mb-1 font-semibold">
-            {d.badgeOptional}
+            {d.packageKey}
+          </label>
+          <input
+            type="text"
+            value={formData.package_key}
+            disabled
+            className="w-full font-sans text-xs border border-charcoal/10 rounded-xl px-3 py-2.5 bg-linen/20 text-charcoal/50 cursor-not-allowed"
+          />
+        </div>
+
+        <div>
+          <label className="font-sans text-[10px] uppercase tracking-wider text-charcoal/45 block mb-1 font-semibold">
+            {d.badgeEn || 'Badge (EN)'}
           </label>
           <input
             type="text"
@@ -301,6 +329,19 @@ function PackageEditorCard({
             onChange={(e) => setFormData({ ...formData, badge: e.target.value })}
             placeholder="e.g. Most Popular"
             className="w-full font-sans text-xs border border-charcoal/15 rounded-xl px-3 py-2.5 outline-none focus:border-forest"
+          />
+        </div>
+
+        <div>
+          <label className="font-sans text-[10px] uppercase tracking-wider text-charcoal/45 block mb-1 font-semibold">
+            {d.badgeAr || 'Badge (AR)'}
+          </label>
+          <input
+            type="text"
+            value={formData.badge_ar || ''}
+            onChange={(e) => setFormData({ ...formData, badge_ar: e.target.value })}
+            placeholder="مثلاً الأكثر طلباً"
+            className="w-full font-sans text-xs border border-charcoal/15 rounded-xl px-3 py-2.5 outline-none focus:border-forest text-right"
           />
         </div>
 
@@ -330,7 +371,7 @@ function PackageEditorCard({
           />
         </div>
 
-        <div className="sm:col-span-2 lg:col-span-3">
+        <div className="sm:col-span-2 lg:col-span-2">
           <label className="font-sans text-[10px] uppercase tracking-wider text-charcoal/45 block mb-1 font-semibold">
             {d.descEn}
           </label>
@@ -341,12 +382,29 @@ function PackageEditorCard({
             className="w-full font-sans text-xs border border-charcoal/15 rounded-xl px-3 py-2 outline-none focus:border-forest resize-none"
           />
         </div>
+
+        <div className="sm:col-span-2 lg:col-span-2">
+          <label className="font-sans text-[10px] uppercase tracking-wider text-charcoal/45 block mb-1 font-semibold">
+            {d.descAr}
+          </label>
+          <textarea
+            value={formData.description_ar || ''}
+            onChange={(e) => setFormData({ ...formData, description_ar: e.target.value })}
+            rows={2}
+            className="w-full font-sans text-xs border border-charcoal/15 rounded-xl px-3 py-2 outline-none focus:border-forest resize-none text-right"
+          />
+        </div>
       </div>
 
       {/* Feature Sections Editor */}
       <div className="border-t border-charcoal/06 pt-4 space-y-4">
         <div className="flex items-center justify-between">
-          <h4 className="font-serif text-base text-charcoal">{d.featureSections}</h4>
+          <div>
+            <h4 className="font-serif text-base text-charcoal">{d.featureSections}</h4>
+            <p className="font-sans text-[10px] text-charcoal/40 mt-0.5">
+              {locale === 'ar' ? 'أدخل العناوين والمميزات باللغتين الإنجليزية والعربية' : 'Enter section titles and items in both English and Arabic'}
+            </p>
+          </div>
           <button
             type="button"
             onClick={handleAddFeatureSection}
@@ -356,34 +414,78 @@ function PackageEditorCard({
           </button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           {(formData.features || []).map((group, gIdx) => (
-            <div key={gIdx} className="bg-linen/25 border border-charcoal/08 rounded-xl p-4 space-y-2.5 relative group">
-              <div className="flex items-center justify-between gap-2">
-                <input
-                  type="text"
-                  value={group.title}
-                  onChange={(e) => handleFeatureTitleChange(gIdx, e.target.value)}
-                  placeholder={d.sectionTitle}
-                  className="font-sans text-xs font-semibold border-b border-charcoal/20 bg-transparent pb-1 outline-none focus:border-forest flex-1"
-                />
+            <div key={gIdx} className="bg-linen/25 border border-charcoal/10 rounded-2xl p-4 space-y-3 relative group">
+              <div className="flex items-center justify-between gap-2 border-b border-charcoal/08 pb-2">
+                <span className="font-sans text-[10px] font-bold uppercase tracking-wider text-forest">
+                  {locale === 'ar' ? `القسم #${gIdx + 1}` : `Section #${gIdx + 1}`}
+                </span>
                 <button
                   type="button"
                   onClick={() => handleRemoveFeatureSection(gIdx)}
-                  className="text-red-400 hover:text-red-600 text-xs px-1"
+                  className="text-red-400 hover:text-red-600 text-xs px-2 py-0.5 rounded bg-red-50"
                   title="Remove Section"
                 >
-                  ✕
+                  ✕ {d.remove}
                 </button>
               </div>
 
-              <textarea
-                value={group.items?.join('\n') || ''}
-                onChange={(e) => handleFeatureItemsTextChange(gIdx, e.target.value)}
-                placeholder={d.featuresPlaceholder}
-                rows={3}
-                className="w-full font-sans text-xs bg-white border border-charcoal/10 rounded-lg p-2.5 outline-none focus:border-forest resize-none leading-relaxed"
-              />
+              {/* Bilingual Titles */}
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="font-sans text-[9px] uppercase tracking-wider text-charcoal/40 block mb-0.5">
+                    {d.sectionTitleEn || 'Title (EN)'}
+                  </label>
+                  <input
+                    type="text"
+                    value={group.title}
+                    onChange={(e) => handleFeatureTitleChange(gIdx, e.target.value)}
+                    placeholder="e.g. Album"
+                    className="w-full font-sans text-xs font-semibold border border-charcoal/15 bg-white rounded-lg p-1.5 outline-none focus:border-forest"
+                  />
+                </div>
+                <div>
+                  <label className="font-sans text-[9px] uppercase tracking-wider text-charcoal/40 block mb-0.5 text-right">
+                    {d.sectionTitleAr || 'Title (AR)'}
+                  </label>
+                  <input
+                    type="text"
+                    value={group.title_ar || ''}
+                    onChange={(e) => handleFeatureTitleArChange(gIdx, e.target.value)}
+                    placeholder="مثلاً الألبوم"
+                    className="w-full font-sans text-xs font-semibold border border-charcoal/15 bg-white rounded-lg p-1.5 outline-none focus:border-forest text-right"
+                  />
+                </div>
+              </div>
+
+              {/* Bilingual Items */}
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="font-sans text-[9px] uppercase tracking-wider text-charcoal/40 block mb-0.5">
+                    {d.featuresPlaceholderEn || 'Items (EN, 1/line)'}
+                  </label>
+                  <textarea
+                    value={group.items?.join('\n') || ''}
+                    onChange={(e) => handleFeatureItemsTextChange(gIdx, e.target.value)}
+                    placeholder="30×60 cm&#10;5 Pages"
+                    rows={4}
+                    className="w-full font-sans text-xs bg-white border border-charcoal/10 rounded-lg p-2 outline-none focus:border-forest resize-none leading-relaxed"
+                  />
+                </div>
+                <div>
+                  <label className="font-sans text-[9px] uppercase tracking-wider text-charcoal/40 block mb-0.5 text-right">
+                    {d.featuresPlaceholderAr || 'العناصر (عربي، سطر لكل بند)'}
+                  </label>
+                  <textarea
+                    value={group.items_ar?.join('\n') || ''}
+                    onChange={(e) => handleFeatureItemsArTextChange(gIdx, e.target.value)}
+                    placeholder="قياس 30×60 سم&#10;5 صفحات"
+                    rows={4}
+                    className="w-full font-sans text-xs bg-white border border-charcoal/10 rounded-lg p-2 outline-none focus:border-forest resize-none leading-relaxed text-right"
+                  />
+                </div>
+              </div>
             </div>
           ))}
         </div>
@@ -1010,13 +1112,25 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
       name_ar: 'مجموعة جديدة',
       price: pkgService === 'full-day' ? 1200 : 350,
       features: [
-        { title: 'Album', items: ['30×60 cm', '5 Pages'] },
-        { title: 'Includes', items: ['Wall Frame', 'Table Frame'] },
+        {
+          title: 'Album',
+          title_ar: 'الألبوم',
+          items: ['30×60 cm', '5 Pages'],
+          items_ar: ['قياس 30×60 سم', '5 صفحات'],
+        },
+        {
+          title: 'Includes',
+          title_ar: 'يشمل أيضاً',
+          items: ['Wall Frame', 'Table Frame'],
+          items_ar: ['إطار جداري فاخر', 'إطار للمكتب'],
+        },
       ],
       description: 'Exclusive coverage by Grooms Art.',
+      description_ar: 'تغطية حصرية مميزة من استوديو Grooms Art.',
       sort_order: cityPkgs.length,
       active: true,
       badge: 'New',
+      badge_ar: 'جديد',
       accent_color: '#12372a',
       image_url: '',
     }
@@ -2023,7 +2137,7 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
                       </button>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                       <div>
                         <label className="font-sans text-[10px] uppercase tracking-wider text-charcoal/50 block mb-1 font-semibold">{d.nameEn}</label>
                         <input
@@ -2065,13 +2179,23 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
                         />
                       </div>
                       <div>
-                        <label className="font-sans text-[10px] uppercase tracking-wider text-charcoal/50 block mb-1 font-semibold">{d.badgeOptional}</label>
+                        <label className="font-sans text-[10px] uppercase tracking-wider text-charcoal/50 block mb-1 font-semibold">{d.badgeEn || 'Badge (EN)'}</label>
                         <input
                           type="text"
                           value={editPkgForm.badge || ''}
                           onChange={(e) => setEditPkgForm({ ...editPkgForm, badge: e.target.value })}
                           placeholder="e.g. Most Popular"
                           className="w-full font-sans text-xs border border-charcoal/15 rounded-xl px-3 py-2.5 outline-none focus:border-forest bg-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="font-sans text-[10px] uppercase tracking-wider text-charcoal/50 block mb-1 font-semibold">{d.badgeAr || 'Badge (AR)'}</label>
+                        <input
+                          type="text"
+                          value={editPkgForm.badge_ar || ''}
+                          onChange={(e) => setEditPkgForm({ ...editPkgForm, badge_ar: e.target.value })}
+                          placeholder="مثلاً الأكثر طلباً"
+                          className="w-full font-sans text-xs border border-charcoal/15 rounded-xl px-3 py-2.5 outline-none focus:border-forest bg-white text-right"
                         />
                       </div>
                       <div>
@@ -2084,13 +2208,32 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
                           className="w-full font-sans text-xs border border-charcoal/15 rounded-xl px-3 py-2.5 outline-none focus:border-forest bg-white"
                         />
                       </div>
-                      <div className="sm:col-span-2 lg:col-span-3">
+                      <div>
+                        <label className="font-sans text-[10px] uppercase tracking-wider text-charcoal/50 block mb-1 font-semibold">{d.imageUrlOptional}</label>
+                        <input
+                          type="text"
+                          value={editPkgForm.image_url || ''}
+                          onChange={(e) => setEditPkgForm({ ...editPkgForm, image_url: e.target.value })}
+                          placeholder="/images/hero.webp"
+                          className="w-full font-sans text-xs border border-charcoal/15 rounded-xl px-3 py-2.5 outline-none focus:border-forest bg-white"
+                        />
+                      </div>
+                      <div className="sm:col-span-2 lg:col-span-2">
                         <label className="font-sans text-[10px] uppercase tracking-wider text-charcoal/50 block mb-1 font-semibold">{d.descEn}</label>
                         <textarea
                           value={editPkgForm.description || ''}
                           onChange={(e) => setEditPkgForm({ ...editPkgForm, description: e.target.value })}
                           rows={2}
                           className="w-full font-sans text-xs border border-charcoal/15 rounded-xl px-3 py-2 outline-none focus:border-forest bg-white resize-none"
+                        />
+                      </div>
+                      <div className="sm:col-span-2 lg:col-span-2">
+                        <label className="font-sans text-[10px] uppercase tracking-wider text-charcoal/50 block mb-1 font-semibold">{d.descAr}</label>
+                        <textarea
+                          value={editPkgForm.description_ar || ''}
+                          onChange={(e) => setEditPkgForm({ ...editPkgForm, description_ar: e.target.value })}
+                          rows={2}
+                          className="w-full font-sans text-xs border border-charcoal/15 rounded-xl px-3 py-2 outline-none focus:border-forest bg-white resize-none text-right"
                         />
                       </div>
                     </div>
