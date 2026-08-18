@@ -133,39 +133,93 @@ export function SharedBookingWizard({
   const goNext = () => setStepIndex((i) => Math.min(i + 1, STEPS.length - 1))
   const goBack = () => setStepIndex((i) => Math.max(i - 1, 0))
 
+function getValidISODateOrToday(input: string | null | undefined): { dbDate: string; rawNote?: string } {
+  const now = new Date()
+  const todayISO = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+
+  if (!input || typeof input !== 'string') {
+    return { dbDate: todayISO }
+  }
+
+  const trimmed = input.trim()
+
+  // Strict regex check for YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    const [y, m, d] = trimmed.split('-').map(Number)
+    if (y >= 2020 && y <= 2100 && m >= 1 && m <= 12 && d >= 1 && d <= 31) {
+      return { dbDate: trimmed }
+    }
+  }
+
+  // Attempt standard Date parsing
+  const parsed = new Date(trimmed)
+  if (!isNaN(parsed.getTime())) {
+    const y = parsed.getFullYear()
+    const m = parsed.getMonth() + 1
+    const d = parsed.getDate()
+    if (y >= 2020 && y <= 2100 && !isNaN(m) && !isNaN(d)) {
+      return { dbDate: `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}` }
+    }
+  }
+
+  // Fallback to today if invalid string (like "unknown date") and record note
+  return { dbDate: todayISO, rawNote: `تاريخ الحجز المطلوب: ${trimmed}` }
+}
+
   const handleConfirm = async () => {
     setSubmitting(true)
 
-    const bookingId = `${type}-${Date.now()}`
+    const fallbackBookingId = `${type}-${Date.now()}`
+    const { dbDate, rawNote } = getValidISODateOrToday(state.date)
+    const combinedNotes = [state.customerInfo.notes, rawNote].filter(Boolean).join('\n')
+
     const dbRow = {
-      id: bookingId,
       type,
       status: 'pending',
       city: state.city ?? '',
       package_id: state.packageId ?? '',
       location_id: state.locationId ?? '',
-      date: state.date ?? '',
+      date: dbDate,
       full_name: state.customerInfo.fullName,
       phone: state.customerInfo.phone,
       email: state.customerInfo.email || '',
-      notes: state.customerInfo.notes || '',
+      notes: combinedNotes,
       whatsapp_triggered: false,
     }
 
-    let savedToSupabase = false
+    let savedBooking: Booking | null = null
     if (supabase) {
       try {
-        const { error } = await supabase.from('bookings').insert(dbRow)
+        const { error } = await supabase
+          .from('bookings')
+          .insert(dbRow)
+
         if (error) throw error
-        savedToSupabase = true
+
+        savedBooking = {
+          id: fallbackBookingId,
+          type,
+          status: 'pending',
+          city: state.city ?? '',
+          packageId: state.packageId ?? '',
+          location: state.locationId ?? '',
+          date: dbDate,
+          customerInfo: {
+            ...state.customerInfo,
+            notes: combinedNotes,
+          },
+          createdAt: new Date().toISOString(),
+        }
       } catch (err) {
         console.error('Failed to save booking to Supabase, fallback to storage:', err)
       }
     }
 
-    if (!savedToSupabase) {
-      const newBooking: Booking = {
-        id: bookingId,
+    // Save/sync into local storage for immediate offline and dashboard availability
+    try {
+      const existing = storage.get<Booking[]>(STORAGE_KEYS.bookings) || []
+      const bookingToSave: Booking = savedBooking || {
+        id: fallbackBookingId,
         type,
         status: 'pending',
         city: state.city ?? '',
@@ -175,13 +229,10 @@ export function SharedBookingWizard({
         customerInfo: state.customerInfo,
         createdAt: new Date().toISOString(),
       }
-      try {
-        const existing = storage.get<Booking[]>(STORAGE_KEYS.bookings) || []
-        existing.unshift(newBooking)
-        storage.set(STORAGE_KEYS.bookings, existing)
-      } catch {
-        // silently handle storage limits
-      }
+      existing.unshift(bookingToSave)
+      storage.set(STORAGE_KEYS.bookings, existing)
+    } catch {
+      // silently handle storage limits
     }
 
     setSubmitting(false)
@@ -267,9 +318,10 @@ export function SharedBookingWizard({
           transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
         >
           {step === 'package' &&
-            renderPackageStep(state.city, state.packageId, (packageId) =>
+            renderPackageStep(state.city, state.packageId, (packageId) => {
               setState((s) => ({ ...s, packageId }))
-            )}
+              setTimeout(() => setStepIndex((i) => Math.min(i + 1, STEPS.length - 1)), 350)
+            })}
 
           {step === 'location' && (
             <LocationStep
@@ -283,7 +335,10 @@ export function SharedBookingWizard({
             <SessionDateStep
               selected={state.date}
               blockedDates={blockedDatesSet}
-              onSelect={(date) => setState((s) => ({ ...s, date }))}
+              onSelect={(date) => {
+                setState((s) => ({ ...s, date }))
+                setTimeout(() => setStepIndex((i) => Math.min(i + 1, STEPS.length - 1)), 350)
+              }}
             />
           )}
 
@@ -338,8 +393,8 @@ export function SharedBookingWizard({
         </motion.div>
       </AnimatePresence>
 
-      {/* Navigation buttons — hidden on city and confirm steps */}
-      {step !== 'city' && step !== 'confirm' && (
+      {/* Navigation buttons — hidden only on confirm step */}
+      {step !== 'confirm' && (
         <div className="flex items-center justify-between gap-4 mt-12 pt-8 border-t border-charcoal/10 w-full">
           <button
             type="button"
@@ -351,7 +406,7 @@ export function SharedBookingWizard({
           <button
             type="button"
             onClick={goNext}
-            disabled={!canContinue}
+            disabled={step !== 'location' && !canContinue}
             className="font-sans text-xs tracking-[0.15em] uppercase bg-forest text-cream px-6 py-3 rounded-lg hover:bg-forest-deep transition-all disabled:opacity-40 disabled:cursor-not-allowed text-center min-w-[100px]"
           >
             {t.sessions.continue}

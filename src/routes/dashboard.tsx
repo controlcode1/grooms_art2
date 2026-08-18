@@ -12,6 +12,8 @@ import {
   getPortfolioCategories,
   savePortfolioCategories,
   DEFAULT_CATEGORIES,
+  deletePortfolioImage as apiDeletePortfolioImage,
+  deletePortfolioCategory as apiDeletePortfolioCategory,
   type PortfolioImage,
   type CategoryInfo,
 } from '@/lib/data/portfolio'
@@ -83,7 +85,6 @@ async function optimizeToWebP(file: File): Promise<string> {
   })
 }
 
-// ─── Components ─────────────────────────────────────────────────────────────
 function StatCard({
   label,
   value,
@@ -101,23 +102,23 @@ function StatCard({
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
       className={clsx(
-        'rounded-2xl p-6 border',
+        'rounded-3xl p-6 border transition-all duration-300 shadow-[0_4px_20px_rgba(0,0,0,0.03)]',
         accent
-          ? 'bg-forest text-cream border-forest/80'
-          : 'bg-white border-charcoal/10 text-charcoal',
+          ? 'bg-forest text-cream border-forest/90 shadow-md'
+          : 'bg-white border-charcoal/15 text-charcoal',
       )}
     >
       <p
         className={clsx(
-          'font-sans text-[10px] tracking-[0.22em] uppercase mb-3',
-          accent ? 'text-cream/60' : 'text-charcoal/40',
+          'font-sans text-[11px] tracking-[0.22em] uppercase mb-3 font-semibold',
+          accent ? 'text-cream/75' : 'text-charcoal/65',
         )}
       >
         {label}
       </p>
       <p
         className={clsx(
-          'font-serif text-4xl mb-1',
+          'font-serif text-4xl sm:text-5xl mb-1 font-light tracking-tight',
           accent ? 'text-cream' : 'text-charcoal',
         )}
       >
@@ -127,7 +128,7 @@ function StatCard({
         <p
           className={clsx(
             'font-sans text-xs',
-            accent ? 'text-cream/50' : 'text-charcoal/40',
+            accent ? 'text-cream/70' : 'text-charcoal/60',
           )}
         >
           {sub}
@@ -140,10 +141,28 @@ function StatCard({
 function SectionHeading({ title, desc }: { title: string; desc?: string }) {
   return (
     <div className="mb-6">
-      <h2 className="font-serif text-2xl text-charcoal">{title}</h2>
-      {desc && <p className="font-sans text-xs text-charcoal/50 mt-1">{desc}</p>}
+      <h2 className="font-serif text-2xl sm:text-3xl text-charcoal font-medium">{title}</h2>
+      {desc && <p className="font-sans text-xs text-charcoal/65 mt-1.5 leading-relaxed">{desc}</p>}
     </div>
   )
+}
+
+function getFreetextForLanguage(features: PackageFeatureGroup[] | undefined, lang: 'en' | 'ar'): string {
+  if (!features || !Array.isArray(features)) return ''
+  const freetextGroup = features.find((g) => g.type === 'freetext')
+  if (freetextGroup) {
+    return lang === 'ar' ? (freetextGroup.ar || '') : (freetextGroup.en || '')
+  }
+  return features
+    .map((g) => {
+      const title = lang === 'ar' ? (g.title_ar || g.title) : g.title
+      const items = lang === 'ar' ? (g.items_ar || g.items) : g.items
+      if (!title && (!items || items.length === 0)) return ''
+      const itemsText = items.map((it) => `• ${it}`).join('\n')
+      return title ? `— ${title}\n${itemsText}` : itemsText
+    })
+    .filter(Boolean)
+    .join('\n\n')
 }
 
 function PackageEditorCard({
@@ -155,6 +174,7 @@ function PackageEditorCard({
   onMoveUp,
   onMoveDown,
   isSaved,
+  onClose,
 }: {
   pkg: Package
   d: any
@@ -164,339 +184,325 @@ function PackageEditorCard({
   onMoveUp: () => Promise<void>
   onMoveDown: () => Promise<void>
   isSaved?: boolean
+  onClose?: () => void
 }) {
   const [formData, setFormData] = useState<Package>(pkg)
   const [saving, setSaving] = useState(false)
+  const [cardTab, setCardTab] = useState<'info' | 'features'>('info')
+  const [enText, setEnText] = useState(() => getFreetextForLanguage(pkg.features, 'en'))
+  const [arText, setArText] = useState(() => getFreetextForLanguage(pkg.features, 'ar'))
 
   useEffect(() => {
     setFormData(pkg)
+    setEnText(getFreetextForLanguage(pkg.features, 'en'))
+    setArText(getFreetextForLanguage(pkg.features, 'ar'))
   }, [pkg])
 
-  const handleFeatureTitleChange = (gIdx: number, newTitle: string) => {
-    const updatedFeatures = [...(formData.features || [])]
-    updatedFeatures[gIdx] = { ...updatedFeatures[gIdx], title: newTitle }
-    setFormData({ ...formData, features: updatedFeatures })
-  }
-
-  const handleFeatureTitleArChange = (gIdx: number, newTitleAr: string) => {
-    const updatedFeatures = [...(formData.features || [])]
-    updatedFeatures[gIdx] = { ...updatedFeatures[gIdx], title_ar: newTitleAr }
-    setFormData({ ...formData, features: updatedFeatures })
-  }
-
-  const handleFeatureItemsTextChange = (gIdx: number, text: string) => {
-    const items = text.split('\n').map((l) => l.trim()).filter(Boolean)
-    const updatedFeatures = [...(formData.features || [])]
-    updatedFeatures[gIdx] = { ...updatedFeatures[gIdx], items }
-    setFormData({ ...formData, features: updatedFeatures })
-  }
-
-  const handleFeatureItemsArTextChange = (gIdx: number, text: string) => {
-    const items_ar = text.split('\n').map((l) => l.trim()).filter(Boolean)
-    const updatedFeatures = [...(formData.features || [])]
-    updatedFeatures[gIdx] = { ...updatedFeatures[gIdx], items_ar }
-    setFormData({ ...formData, features: updatedFeatures })
-  }
-
-  const handleAddFeatureSection = () => {
-    const updatedFeatures = [
-      ...(formData.features || []),
-      { title: 'New Section', title_ar: 'قسم جديد', items: ['Feature 1'], items_ar: ['ميزة 1'] },
-    ]
-    setFormData({ ...formData, features: updatedFeatures })
-  }
-
-  const handleRemoveFeatureSection = (gIdx: number) => {
-    const updatedFeatures = (formData.features || []).filter((_, i) => i !== gIdx)
-    setFormData({ ...formData, features: updatedFeatures })
-  }
+  const featuresCount = useMemo(() => {
+    const lines = enText.split('\n').map((l) => l.trim()).filter(Boolean)
+    return lines.filter(l => !l.startsWith('—')).length
+  }, [enText])
 
   const submitSave = async () => {
     setSaving(true)
-    await onSave(formData)
+    const updatedFeatures: PackageFeatureGroup[] = [
+      {
+        type: 'freetext',
+        en: enText,
+        ar: arText,
+        title: '',
+        items: []
+      }
+    ]
+    await onSave({ ...formData, features: updatedFeatures })
     setSaving(false)
   }
 
   return (
-    <div className="bg-white border border-charcoal/10 rounded-2xl p-6 shadow-sm space-y-6">
-      {/* Header with Title, Status & Actions */}
-      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-charcoal/06 pb-4">
-        <div className="flex items-center gap-3">
+    <div className="bg-white border border-charcoal/15 rounded-3xl p-6 sm:p-7 shadow-[0_4px_24px_rgba(0,0,0,0.03)] space-y-6">
+      {/* ─── Header with Title, Status & Actions ─── */}
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-charcoal/10 pb-5">
+        <div className="flex items-center gap-3.5 flex-wrap">
+          {/* Active / Hidden Toggle */}
           <button
             type="button"
             onClick={() => setFormData({ ...formData, active: !formData.active })}
             className={clsx(
-              'font-sans text-[10px] tracking-wider uppercase px-3 py-1.5 rounded-full font-semibold transition-all',
+              'font-sans text-[11px] tracking-wider uppercase px-3.5 py-1.5 rounded-full font-semibold transition-all shadow-xs flex items-center gap-1.5',
               formData.active
-                ? 'bg-green-100 text-green-800 hover:bg-green-200'
-                : 'bg-charcoal/10 text-charcoal/50 hover:bg-charcoal/15',
+                ? 'bg-forest/10 text-forest border border-forest/20 hover:bg-forest/15'
+                : 'bg-charcoal/08 text-charcoal/60 border border-charcoal/10 hover:bg-charcoal/12',
             )}
           >
-            {formData.active ? '● ' + d.visibleOnSite : '○ ' + d.hiddenFromSite}
+            <span className={clsx('w-2.5 h-2.5 rounded-full', formData.active ? 'bg-forest' : 'bg-charcoal/40')} />
+            <span>{formData.active ? d.visibleOnSite : d.hiddenFromSite}</span>
           </button>
 
+          {/* Package Name & Price Preview */}
+          <div className="flex items-baseline gap-2">
+            <h3 className="font-serif text-xl sm:text-2xl text-charcoal font-medium">
+              {formData.name || 'Untitled Package'}
+            </h3>
+            {formData.name_ar && (
+              <span className="font-sans text-sm text-charcoal/50">· {formData.name_ar}</span>
+            )}
+            <span className="font-serif text-xl sm:text-2xl text-forest font-light ml-1">
+              ${formData.price?.toLocaleString()}
+            </span>
+          </div>
+
           {formData.badge && (
-            <span className="font-sans text-[10px] tracking-wider uppercase px-2.5 py-1 rounded-full bg-forest/10 text-forest font-semibold">
+            <span className="font-sans text-[10px] tracking-wider uppercase px-3 py-1 rounded-full bg-linen border border-charcoal/10 text-charcoal font-semibold">
               {formData.badge}
             </span>
           )}
         </div>
 
-        <div className="flex items-center gap-2">
+        {/* Action Controls */}
+        <div className="flex items-center gap-2 flex-wrap">
           <button
             type="button"
             onClick={onMoveUp}
-            className="px-2 py-1 text-charcoal/50 hover:text-charcoal border border-charcoal/15 rounded-lg text-xs font-sans font-medium"
+            className="px-3 py-1.5 text-charcoal hover:text-forest border border-charcoal/20 hover:border-forest/40 rounded-xl text-xs font-sans font-medium transition-colors bg-white shadow-2xs"
             title={d.moveUp}
           >
-            {d.moveUp}
+            ↑ {d.moveUp}
           </button>
           <button
             type="button"
             onClick={onMoveDown}
-            className="px-2 py-1 text-charcoal/50 hover:text-charcoal border border-charcoal/15 rounded-lg text-xs font-sans font-medium"
+            className="px-3 py-1.5 text-charcoal hover:text-forest border border-charcoal/20 hover:border-forest/40 rounded-xl text-xs font-sans font-medium transition-colors bg-white shadow-2xs"
             title={d.moveDown}
           >
-            {d.moveDown}
+            ↓ {d.moveDown}
           </button>
           <button
             type="button"
             onClick={() => onDelete(pkg.id)}
-            className="font-sans text-xs uppercase text-red-500 hover:text-red-700 px-2 py-1"
+            className="font-sans text-xs uppercase text-red-600 hover:text-red-700 font-semibold px-3 py-1.5 rounded-xl border border-red-200 bg-red-50/50 hover:bg-red-50 transition-colors"
           >
             {d.remove}
           </button>
+          {onClose && (
+            <button
+              type="button"
+              onClick={onClose}
+              className="font-sans text-xs uppercase text-charcoal/50 hover:text-charcoal px-3 py-1.5 rounded-xl border border-charcoal/20 bg-white hover:bg-charcoal/05 transition-colors"
+              aria-label="Close"
+            >
+              ✕
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Main Form Fields */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div>
-          <label className="font-sans text-[10px] uppercase tracking-wider text-charcoal/45 block mb-1 font-semibold">
-            {d.nameEn}
-          </label>
-          <input
-            type="text"
-            value={formData.name}
-            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-            className="w-full font-sans text-xs border border-charcoal/15 rounded-xl px-3 py-2.5 outline-none focus:border-forest"
-          />
-        </div>
+      {/* ─── Sub-Tabs Bar: Info vs Features ─── */}
+      <div className="flex border-b border-charcoal/10 gap-6">
+        <button
+          type="button"
+          onClick={() => setCardTab('info')}
+          className={clsx(
+            'font-sans text-xs uppercase tracking-wider pb-3 font-semibold transition-all relative flex items-center gap-2',
+            cardTab === 'info'
+              ? 'text-forest border-b-2 border-forest -mb-px'
+              : 'text-charcoal/50 hover:text-charcoal',
+          )}
+        >
+          <span>{locale === 'ar' ? 'المعلومات والأسعار' : 'Info & Pricing'}</span>
+        </button>
 
-        <div>
-          <label className="font-sans text-[10px] uppercase tracking-wider text-charcoal/45 block mb-1 font-semibold">
-            {d.nameAr}
-          </label>
-          <input
-            type="text"
-            value={formData.name_ar}
-            onChange={(e) => setFormData({ ...formData, name_ar: e.target.value })}
-            className="w-full font-sans text-xs border border-charcoal/15 rounded-xl px-3 py-2.5 outline-none focus:border-forest text-right"
-          />
-        </div>
-
-        <div>
-          <label className="font-sans text-[10px] uppercase tracking-wider text-charcoal/45 block mb-1 font-semibold">
-            {d.priceUsd}
-          </label>
-          <input
-            type="number"
-            value={formData.price}
-            onChange={(e) => setFormData({ ...formData, price: Number(e.target.value) })}
-            className="w-full font-sans text-xs border border-charcoal/15 rounded-xl px-3 py-2.5 outline-none focus:border-forest"
-          />
-        </div>
-
-        <div>
-          <label className="font-sans text-[10px] uppercase tracking-wider text-charcoal/45 block mb-1 font-semibold">
-            {d.packageKey}
-          </label>
-          <input
-            type="text"
-            value={formData.package_key}
-            disabled
-            className="w-full font-sans text-xs border border-charcoal/10 rounded-xl px-3 py-2.5 bg-linen/20 text-charcoal/50 cursor-not-allowed"
-          />
-        </div>
-
-        <div>
-          <label className="font-sans text-[10px] uppercase tracking-wider text-charcoal/45 block mb-1 font-semibold">
-            {d.badgeEn || 'Badge (EN)'}
-          </label>
-          <input
-            type="text"
-            value={formData.badge || ''}
-            onChange={(e) => setFormData({ ...formData, badge: e.target.value })}
-            placeholder="e.g. Most Popular"
-            className="w-full font-sans text-xs border border-charcoal/15 rounded-xl px-3 py-2.5 outline-none focus:border-forest"
-          />
-        </div>
-
-        <div>
-          <label className="font-sans text-[10px] uppercase tracking-wider text-charcoal/45 block mb-1 font-semibold">
-            {d.badgeAr || 'Badge (AR)'}
-          </label>
-          <input
-            type="text"
-            value={formData.badge_ar || ''}
-            onChange={(e) => setFormData({ ...formData, badge_ar: e.target.value })}
-            placeholder="مثلاً الأكثر طلباً"
-            className="w-full font-sans text-xs border border-charcoal/15 rounded-xl px-3 py-2.5 outline-none focus:border-forest text-right"
-          />
-        </div>
-
-        <div>
-          <label className="font-sans text-[10px] uppercase tracking-wider text-charcoal/45 block mb-1 font-semibold">
-            {d.accentColorOptional}
-          </label>
-          <input
-            type="text"
-            value={formData.accent_color || ''}
-            onChange={(e) => setFormData({ ...formData, accent_color: e.target.value })}
-            placeholder="#12372a"
-            className="w-full font-sans text-xs border border-charcoal/15 rounded-xl px-3 py-2.5 outline-none focus:border-forest"
-          />
-        </div>
-
-        <div>
-          <label className="font-sans text-[10px] uppercase tracking-wider text-charcoal/45 block mb-1 font-semibold">
-            {d.imageUrlOptional}
-          </label>
-          <input
-            type="text"
-            value={formData.image_url || ''}
-            onChange={(e) => setFormData({ ...formData, image_url: e.target.value })}
-            placeholder="/images/hero.webp"
-            className="w-full font-sans text-xs border border-charcoal/15 rounded-xl px-3 py-2.5 outline-none focus:border-forest"
-          />
-        </div>
-
-        <div className="sm:col-span-2 lg:col-span-2">
-          <label className="font-sans text-[10px] uppercase tracking-wider text-charcoal/45 block mb-1 font-semibold">
-            {d.descEn}
-          </label>
-          <textarea
-            value={formData.description || ''}
-            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-            rows={2}
-            className="w-full font-sans text-xs border border-charcoal/15 rounded-xl px-3 py-2 outline-none focus:border-forest resize-none"
-          />
-        </div>
-
-        <div className="sm:col-span-2 lg:col-span-2">
-          <label className="font-sans text-[10px] uppercase tracking-wider text-charcoal/45 block mb-1 font-semibold">
-            {d.descAr}
-          </label>
-          <textarea
-            value={formData.description_ar || ''}
-            onChange={(e) => setFormData({ ...formData, description_ar: e.target.value })}
-            rows={2}
-            className="w-full font-sans text-xs border border-charcoal/15 rounded-xl px-3 py-2 outline-none focus:border-forest resize-none text-right"
-          />
-        </div>
+        <button
+          type="button"
+          onClick={() => setCardTab('features')}
+          className={clsx(
+            'font-sans text-xs uppercase tracking-wider pb-3 font-semibold transition-all relative flex items-center gap-2',
+            cardTab === 'features'
+              ? 'text-forest border-b-2 border-forest -mb-px'
+              : 'text-charcoal/50 hover:text-charcoal',
+          )}
+        >
+          <span>{locale === 'ar' ? 'المميزات والمحتويات' : 'Features & Deliverables'}</span>
+          <span className="text-[10px] px-2 py-0.5 rounded-full bg-forest/10 text-forest font-bold">
+            {featuresCount}
+          </span>
+        </button>
       </div>
 
-      {/* Feature Sections Editor */}
-      <div className="border-t border-charcoal/06 pt-4 space-y-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h4 className="font-serif text-base text-charcoal">{d.featureSections}</h4>
-            <p className="font-sans text-[10px] text-charcoal/40 mt-0.5">
-              {locale === 'ar' ? 'أدخل العناوين والمميزات باللغتين الإنجليزية والعربية' : 'Enter section titles and items in both English and Arabic'}
-            </p>
+      {/* ─── SUB-TAB 1: INFO & PRICING ─── */}
+      {cardTab === 'info' && (
+        <div className="space-y-5 animate-fadeIn">
+          {/* Row 1: Names EN & AR */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="font-sans text-[11px] uppercase tracking-wider text-charcoal font-semibold block mb-1.5">
+                {d.nameEn} <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                placeholder="e.g. Essential Collection"
+                className="w-full font-sans text-xs text-charcoal font-medium border border-charcoal/20 bg-white rounded-xl px-3.5 py-3 outline-none focus:border-forest focus:ring-2 focus:ring-forest/15 transition-all shadow-2xs"
+              />
+            </div>
+
+            <div>
+              <label className="font-sans text-[11px] uppercase tracking-wider text-charcoal font-semibold block mb-1.5 text-right">
+                {d.nameAr} <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                value={formData.name_ar}
+                onChange={(e) => setFormData({ ...formData, name_ar: e.target.value })}
+                placeholder="مثلاً الباقة الأساسية"
+                className="w-full font-sans text-xs text-charcoal font-medium border border-charcoal/20 bg-white rounded-xl px-3.5 py-3 outline-none focus:border-forest focus:ring-2 focus:ring-forest/15 transition-all shadow-2xs text-right"
+              />
+            </div>
           </div>
-          <button
-            type="button"
-            onClick={handleAddFeatureSection}
-            className="font-sans text-xs text-forest hover:underline font-medium"
-          >
-            {d.addSection}
-          </button>
-        </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          {(formData.features || []).map((group, gIdx) => (
-            <div key={gIdx} className="bg-linen/25 border border-charcoal/10 rounded-2xl p-4 space-y-3 relative group">
-              <div className="flex items-center justify-between gap-2 border-b border-charcoal/08 pb-2">
-                <span className="font-sans text-[10px] font-bold uppercase tracking-wider text-forest">
-                  {locale === 'ar' ? `القسم #${gIdx + 1}` : `Section #${gIdx + 1}`}
+          {/* Row 2: Price USD, Badge EN, Badge AR */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <label className="font-sans text-[11px] uppercase tracking-wider text-charcoal font-semibold block mb-1.5">
+                {d.priceUsd} <span className="text-red-500">*</span>
+              </label>
+              <div className="relative">
+                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-serif text-forest text-base font-semibold pointer-events-none">
+                  $
                 </span>
-                <button
-                  type="button"
-                  onClick={() => handleRemoveFeatureSection(gIdx)}
-                  className="text-red-400 hover:text-red-600 text-xs px-2 py-0.5 rounded bg-red-50"
-                  title="Remove Section"
-                >
-                  ✕ {d.remove}
-                </button>
-              </div>
-
-              {/* Bilingual Titles */}
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="font-sans text-[9px] uppercase tracking-wider text-charcoal/40 block mb-0.5">
-                    {d.sectionTitleEn || 'Title (EN)'}
-                  </label>
-                  <input
-                    type="text"
-                    value={group.title}
-                    onChange={(e) => handleFeatureTitleChange(gIdx, e.target.value)}
-                    placeholder="e.g. Album"
-                    className="w-full font-sans text-xs font-semibold border border-charcoal/15 bg-white rounded-lg p-1.5 outline-none focus:border-forest"
-                  />
-                </div>
-                <div>
-                  <label className="font-sans text-[9px] uppercase tracking-wider text-charcoal/40 block mb-0.5 text-right">
-                    {d.sectionTitleAr || 'Title (AR)'}
-                  </label>
-                  <input
-                    type="text"
-                    value={group.title_ar || ''}
-                    onChange={(e) => handleFeatureTitleArChange(gIdx, e.target.value)}
-                    placeholder="مثلاً الألبوم"
-                    className="w-full font-sans text-xs font-semibold border border-charcoal/15 bg-white rounded-lg p-1.5 outline-none focus:border-forest text-right"
-                  />
-                </div>
-              </div>
-
-              {/* Bilingual Items */}
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="font-sans text-[9px] uppercase tracking-wider text-charcoal/40 block mb-0.5">
-                    {d.featuresPlaceholderEn || 'Items (EN, 1/line)'}
-                  </label>
-                  <textarea
-                    value={group.items?.join('\n') || ''}
-                    onChange={(e) => handleFeatureItemsTextChange(gIdx, e.target.value)}
-                    placeholder="30×60 cm&#10;5 Pages"
-                    rows={4}
-                    className="w-full font-sans text-xs bg-white border border-charcoal/10 rounded-lg p-2 outline-none focus:border-forest resize-none leading-relaxed"
-                  />
-                </div>
-                <div>
-                  <label className="font-sans text-[9px] uppercase tracking-wider text-charcoal/40 block mb-0.5 text-right">
-                    {d.featuresPlaceholderAr || 'العناصر (عربي، سطر لكل بند)'}
-                  </label>
-                  <textarea
-                    value={group.items_ar?.join('\n') || ''}
-                    onChange={(e) => handleFeatureItemsArTextChange(gIdx, e.target.value)}
-                    placeholder="قياس 30×60 سم&#10;5 صفحات"
-                    rows={4}
-                    className="w-full font-sans text-xs bg-white border border-charcoal/10 rounded-lg p-2 outline-none focus:border-forest resize-none leading-relaxed text-right"
-                  />
-                </div>
+                <input
+                  type="number"
+                  value={formData.price}
+                  onChange={(e) => setFormData({ ...formData, price: Number(e.target.value) })}
+                  className="w-full font-sans text-xs text-charcoal font-semibold border border-charcoal/20 bg-white rounded-xl pl-8 pr-3.5 py-3 outline-none focus:border-forest focus:ring-2 focus:ring-forest/15 transition-all shadow-2xs"
+                />
               </div>
             </div>
-          ))}
-        </div>
-      </div>
 
-      {/* Footer with Save Action */}
-      <div className="border-t border-charcoal/06 pt-4 flex items-center justify-between">
+            <div>
+              <label className="font-sans text-[11px] uppercase tracking-wider text-charcoal font-semibold block mb-1.5">
+                {d.badgeEn || 'Badge (EN)'}
+              </label>
+              <input
+                type="text"
+                value={formData.badge || ''}
+                onChange={(e) => setFormData({ ...formData, badge: e.target.value })}
+                placeholder="e.g. Most Popular"
+                className="w-full font-sans text-xs text-charcoal font-medium border border-charcoal/20 bg-white rounded-xl px-3.5 py-3 outline-none focus:border-forest focus:ring-2 focus:ring-forest/15 transition-all shadow-2xs"
+              />
+            </div>
+
+            <div>
+              <label className="font-sans text-[11px] uppercase tracking-wider text-charcoal font-semibold block mb-1.5 text-right">
+                {d.badgeAr || 'Badge (AR)'}
+              </label>
+              <input
+                type="text"
+                value={formData.badge_ar || ''}
+                onChange={(e) => setFormData({ ...formData, badge_ar: e.target.value })}
+                placeholder="مثلاً الأكثر طلباً"
+                className="w-full font-sans text-xs text-charcoal font-medium border border-charcoal/20 bg-white rounded-xl px-3.5 py-3 outline-none focus:border-forest focus:ring-2 focus:ring-forest/15 transition-all shadow-2xs text-right"
+              />
+            </div>
+          </div>
+
+          {/* Row 3: Package Key */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="font-sans text-[11px] uppercase tracking-wider text-charcoal font-semibold block mb-1.5">
+                {d.packageKey}
+              </label>
+              <input
+                type="text"
+                value={formData.package_key}
+                onChange={(e) => setFormData({ ...formData, package_key: e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, '') })}
+                className="w-full font-sans text-xs border border-charcoal/15 rounded-xl px-3.5 py-3 bg-white text-charcoal font-mono outline-none focus:border-forest focus:ring-2 focus:ring-forest/15 shadow-2xs"
+              />
+            </div>
+          </div>
+
+          {/* Row 4: Descriptions EN & AR */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="font-sans text-[11px] uppercase tracking-wider text-charcoal font-semibold block mb-1.5">
+                {d.descEn}
+              </label>
+              <textarea
+                value={formData.description || ''}
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                rows={3}
+                placeholder="Brief editorial summary of the collection..."
+                className="w-full font-sans text-xs text-charcoal font-medium border border-charcoal/20 bg-white rounded-xl px-3.5 py-3 outline-none focus:border-forest focus:ring-2 focus:ring-forest/15 transition-all shadow-2xs resize-none leading-relaxed"
+              />
+            </div>
+
+            <div>
+              <label className="font-sans text-[11px] uppercase tracking-wider text-charcoal font-semibold block mb-1.5 text-right">
+                {d.descAr}
+              </label>
+              <textarea
+                value={formData.description_ar || ''}
+                onChange={(e) => setFormData({ ...formData, description_ar: e.target.value })}
+                rows={3}
+                placeholder="نبذة توثيقية مختصرة عن تفاصيل الباقة..."
+                className="w-full font-sans text-xs text-charcoal font-medium border border-charcoal/20 bg-white rounded-xl px-3.5 py-3 outline-none focus:border-forest focus:ring-2 focus:ring-forest/15 transition-all shadow-2xs resize-none leading-relaxed text-right"
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── SUB-TAB 2: FEATURES & DELIVERABLES ─── */}
+      {cardTab === 'features' && (
+        <div className="space-y-5 animate-fadeIn">
+          <div className="bg-linen/40 p-4 rounded-2xl border border-charcoal/10">
+            <h4 className="font-serif text-lg text-charcoal font-medium">
+              {locale === 'ar' ? 'تفاصيل الباقة والمحتويات' : 'Package Details & Deliverables'}
+            </h4>
+            <p className="font-sans text-xs text-charcoal/65 mt-1 leading-relaxed text-left rtl:text-right">
+              {locale === 'ar'
+                ? 'اكتب كل ميزة أو خدمة في سطر جديد. استخدم "—" قبل العنوان لإنشاء عنوان قسم جديد (مثلاً: — الألبوم).'
+                : 'Enter each feature or service on a new line. Prefix titles with "—" to create section headers (e.g., — Album).'}
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <div>
+              <label className="font-sans text-[11px] uppercase tracking-wider text-charcoal font-semibold block mb-1.5">
+                Package Details (EN)
+              </label>
+              <textarea
+                value={enText}
+                onChange={(e) => setEnText(e.target.value)}
+                rows={10}
+                placeholder="— Album&#10;• 30x60 cm Main Album&#10;• 5 Pages&#10;&#10;— Film&#10;• 30-60 Seconds Reel"
+                className="w-full font-sans text-xs text-charcoal bg-white border border-charcoal/20 rounded-xl p-4 outline-none focus:border-forest focus:ring-2 focus:ring-forest/15 resize-none leading-relaxed shadow-2xs"
+              />
+            </div>
+
+            <div>
+              <label className="font-sans text-[11px] uppercase tracking-wider text-charcoal font-semibold block mb-1.5 text-right">
+                تفاصيل الباقة (AR)
+              </label>
+              <textarea
+                value={arText}
+                onChange={(e) => setArText(e.target.value)}
+                rows={10}
+                placeholder="— الألبوم&#10;• ألبوم رئيسي قياس 30x60 سم&#10;• 5 صفحات&#10;&#10;— الفيديو&#10;• ريل سينمائي 30-60 ثانية"
+                className="w-full font-sans text-xs text-charcoal bg-white border border-charcoal/20 rounded-xl p-4 outline-none focus:border-forest focus:ring-2 focus:ring-forest/15 resize-none leading-relaxed text-right shadow-2xs"
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Footer with Save Action ─── */}
+      <div className="border-t border-charcoal/10 pt-5 flex items-center justify-between flex-wrap gap-4">
         <div>
           {isSaved && (
-            <span className="font-sans text-xs text-green-700 font-semibold animate-fadeIn">
-              {d.packageSaved}
+            <span className="font-sans text-xs text-forest font-bold flex items-center gap-1.5 animate-fadeIn bg-forest/10 px-3 py-1.5 rounded-full">
+              <span>✓</span>
+              <span>{d.packageSaved}</span>
             </span>
           )}
         </div>
@@ -505,7 +511,7 @@ function PackageEditorCard({
           type="button"
           onClick={submitSave}
           disabled={saving}
-          className="font-sans text-xs tracking-wider uppercase bg-forest text-cream px-6 py-2.5 rounded-xl hover:bg-forest-deep transition-colors font-medium shadow-sm disabled:opacity-50"
+          className="font-sans text-xs tracking-wider uppercase bg-forest text-cream px-8 py-3.5 rounded-xl hover:bg-forest-deep transition-all font-semibold shadow-sm disabled:opacity-50 min-h-[44px] flex items-center gap-2"
         >
           {saving ? 'Saving…' : d.savePackage}
         </button>
@@ -1044,6 +1050,7 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
   const [editingPkgId, setEditingPkgId] = useState<string | null>(null)
   const [editPkgForm, setEditPkgForm] = useState<Package | null>(null)
   const [pkgSaveMessage, setPkgSaveMessage] = useState<string | null>(null)
+  const [activeEditingPkg, setActiveEditingPkg] = useState<string | null>(null) // id open in modal
 
   const reloadPackages = useCallback(async () => {
     setPkgLoading(true)
@@ -1316,6 +1323,7 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
   const [renameNameEn, setRenameNameEn] = useState('')
   const [renameNameAr, setRenameNameAr] = useState('')
   const [uploading, setUploading] = useState(false)
+  const [activeCatModal, setActiveCatModal] = useState<string | null>(null) // category id open in modal
 
   const reloadPortfolio = useCallback(() => {
     setCategories(getPortfolioCategories())
@@ -1377,16 +1385,13 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
     }
 
     if (!confirm('Are you sure you want to delete this category?')) return
-    const updated = categories.filter((c) => c.id !== catId)
-    savePortfolioCategories(updated)
-    setCategories(updated)
+    apiDeletePortfolioCategory(catId)
+    setCategories(getPortfolioCategories())
   }
 
   const deletePortfolioImage = (imgId: string) => {
     if (!confirm('Are you sure you want to remove this image?')) return
-    const customImgs = storage.get<PortfolioImage[]>(STORAGE_KEYS.portfolioImages) || []
-    const updatedCustom = customImgs.filter((img) => img.id !== imgId)
-    savePortfolioImages(updatedCustom)
+    apiDeletePortfolioImage(imgId)
     setPortfolioImgs(getPortfolioImages())
   }
 
@@ -1445,10 +1450,10 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
   }, [bookings, bookingFilter])
 
   return (
-    <div className="min-h-screen bg-[#F5F3EE]" dir="ltr">
+    <div className="min-h-screen bg-[#F7F5F0]" dir="ltr">
       {/* Header bar */}
-      <header className="fixed inset-x-0 top-0 z-50 p-4 md:p-6 flex justify-center">
-        <div className="w-full max-w-6xl flex items-center justify-between px-6 md:px-10 py-3.5 rounded-full bg-[#F5F3EE]/40 backdrop-blur-md border border-charcoal/05">
+      <header className="fixed inset-x-0 top-0 z-50 p-4 md:p-6 flex justify-center pointer-events-none">
+        <div className="w-full max-w-6xl flex items-center justify-between px-6 md:px-10 py-3.5 rounded-full bg-white/85 backdrop-blur-md border border-charcoal/10 shadow-[0_4px_20px_rgba(0,0,0,0.04)] pointer-events-auto">
           <Link to="/" className="block py-0.5 transition-opacity duration-300 hover:opacity-85">
             <img
               src="/images/logo.png"
@@ -1460,21 +1465,21 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
             <button
               type="button"
               onClick={toggleLocale}
-              className="font-sans text-xs tracking-[0.2em] uppercase text-charcoal/60 hover:text-charcoal transition-colors duration-300"
+              className="font-sans text-xs tracking-[0.2em] uppercase text-charcoal font-semibold hover:text-forest transition-colors duration-300"
               aria-label="Toggle language"
             >
               {locale === 'en' ? 'AR' : 'EN'}
             </button>
             <Link
               to="/"
-              className="font-sans text-xs tracking-[0.2em] uppercase text-charcoal/60 hover:text-charcoal transition-colors duration-300"
+              className="font-sans text-xs tracking-[0.2em] uppercase text-charcoal font-semibold hover:text-forest transition-colors duration-300"
             >
               Home
             </Link>
             <button
               type="button"
               onClick={onLogout}
-              className="font-sans text-xs tracking-[0.2em] uppercase text-charcoal/60 hover:text-charcoal transition-colors duration-300"
+              className="font-sans text-xs tracking-[0.2em] uppercase text-charcoal font-semibold hover:text-red-600 transition-colors duration-300"
             >
               Sign Out
             </button>
@@ -1482,19 +1487,19 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto px-6 md:px-10 pt-28 pb-10">
+      <main className="max-w-6xl mx-auto px-6 md:px-10 pt-28 pb-16">
         {/* Navigation Tabs */}
-        <div className="flex gap-1 mb-8 bg-white rounded-xl p-1 border border-charcoal/08 w-fit shadow-sm overflow-x-auto max-w-full">
+        <div className="flex gap-1.5 mb-8 bg-white rounded-2xl p-1.5 border border-charcoal/15 w-fit shadow-xs overflow-x-auto max-w-full">
           {(['bookings', 'availability', 'packages', 'portfolio'] as DashboardTab[]).map((t) => (
             <button
               key={t}
               type="button"
               onClick={() => setActiveTab(t)}
               className={clsx(
-                'font-sans text-xs tracking-[0.15em] uppercase px-4 py-2.5 rounded-lg transition-all duration-300 whitespace-nowrap',
+                'font-sans text-xs tracking-[0.15em] uppercase px-4 py-2.5 rounded-xl transition-all duration-300 whitespace-nowrap font-medium min-h-[40px]',
                 activeTab === t
-                  ? 'bg-forest text-cream shadow-sm'
-                  : 'text-charcoal/50 hover:text-charcoal',
+                  ? 'bg-forest text-cream shadow-sm font-semibold'
+                  : 'text-charcoal/70 hover:text-charcoal hover:bg-charcoal/04',
               )}
             >
               {t === 'bookings'
@@ -1512,7 +1517,7 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
         {activeTab === 'bookings' && (
           <div>
             {/* Quick Stats */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-5 mb-8">
               <StatCard label={d.totalBookings} value={bookings.length} accent />
               <StatCard label={d.pendingApproval} value={pendingCount} />
               <StatCard label={d.baghdad} value={totalBaghdad} sub={d.bookings.toLowerCase()} />
@@ -1521,19 +1526,19 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
 
             {/* Task 9: Upcoming Bookings (3-Day Rolling Window) */}
             {upcomingBookings.length > 0 && (
-              <div className="mb-8 bg-white border border-forest/20 rounded-2xl p-6 shadow-sm">
-                <div className="flex items-center justify-between gap-4 mb-4">
+              <div className="mb-8 bg-white border border-charcoal/15 rounded-3xl p-6 sm:p-7 shadow-[0_4px_20px_rgba(0,0,0,0.03)]">
+                <div className="flex items-center justify-between gap-4 mb-3">
                   <div className="flex items-center gap-2.5">
                     <span className="w-2.5 h-2.5 rounded-full bg-forest animate-ping" />
-                    <h3 className="font-serif text-xl text-charcoal font-medium">
+                    <h3 className="font-serif text-2xl text-charcoal font-medium">
                       {d.upcomingTitle}
                     </h3>
                   </div>
-                  <span className="font-sans text-[10px] tracking-wider uppercase bg-forest/10 text-forest font-semibold px-3 py-1 rounded-full">
+                  <span className="font-sans text-[10px] tracking-wider uppercase bg-forest/10 text-forest font-bold px-3 py-1 rounded-full border border-forest/20">
                     {upcomingBookings.length} {locale === 'ar' ? 'حجوزات قريبة' : 'Upcoming'}
                   </span>
                 </div>
-                <p className="font-sans text-xs text-charcoal/55 mb-5">
+                <p className="font-sans text-xs text-charcoal/65 mb-6">
                   {d.upcomingDesc}
                 </p>
 
@@ -1541,11 +1546,11 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
                   {upcomingBookings.map((ub) => (
                     <div
                       key={ub.id}
-                      className="border-l-4 border-forest bg-forest/[0.02] border border-charcoal/08 rounded-xl p-4 flex flex-col justify-between gap-3 hover:shadow-sm transition-all"
+                      className="border border-charcoal/15 bg-[#FAF9F5] rounded-2xl p-5 flex flex-col justify-between gap-3.5 hover:bg-white hover:border-forest/40 hover:shadow-md transition-all"
                     >
                       <div>
-                        <div className="flex items-center justify-between gap-2 mb-2">
-                          <span className="font-sans text-[9px] tracking-wider uppercase px-2 py-0.5 rounded bg-forest/10 text-forest font-semibold">
+                        <div className="flex items-center justify-between gap-2 mb-2.5">
+                          <span className="font-sans text-[9px] tracking-wider uppercase px-2.5 py-0.5 rounded-md bg-forest/10 text-forest font-semibold border border-forest/15">
                             {ub.type === 'full-day' ? d.fullDay : d.session}
                           </span>
                           <span className="font-sans text-xs text-forest font-bold">
@@ -1553,20 +1558,20 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
                           </span>
                         </div>
                         <p className="font-serif text-lg text-charcoal font-medium">{ub.customerInfo.fullName}</p>
-                        <p className="font-sans text-xs text-charcoal/60 capitalize mt-0.5">
+                        <p className="font-sans text-xs text-charcoal/65 capitalize mt-0.5 font-medium">
                           {d[ub.city as keyof typeof d] || ub.city} · {ub.packageId ? (PACKAGE_NAMES[ub.packageId] ?? ub.packageId) : '—'}
                         </p>
                       </div>
 
-                      <div className="pt-2 border-t border-charcoal/06 flex items-center justify-between">
-                        <a href={`tel:${ub.customerInfo.phone}`} className="font-sans text-xs text-forest underline">
+                      <div className="pt-3 border-t border-charcoal/10 flex items-center justify-between">
+                        <a href={`tel:${ub.customerInfo.phone}`} className="font-sans text-xs text-forest font-semibold hover:underline">
                           {ub.customerInfo.phone}
                         </a>
                         <span className={clsx(
-                          'font-sans text-[9px] tracking-wider uppercase px-2 py-0.5 rounded font-medium',
-                          ub.status === 'pending' && 'bg-yellow-100 text-yellow-800',
-                          ub.status === 'confirmed' && 'bg-blue-100 text-blue-800',
-                          ub.status === 'approved' && 'bg-green-100 text-green-800',
+                          'font-sans text-[10px] tracking-wider uppercase px-2.5 py-0.5 rounded-md font-semibold',
+                          ub.status === 'pending' && 'bg-amber-100 text-amber-900 border border-amber-200',
+                          ub.status === 'confirmed' && 'bg-blue-100 text-blue-900 border border-blue-200',
+                          ub.status === 'approved' && 'bg-emerald-100 text-emerald-900 border border-emerald-200',
                         )}>
                           {d[ub.status as keyof typeof d] || ub.status}
                         </span>
@@ -1585,10 +1590,10 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
                   type="button"
                   onClick={() => setBookingFilter(f as any)}
                   className={clsx(
-                    'font-sans text-[10px] tracking-[0.15em] uppercase px-3 py-1.5 rounded-md border transition-all',
+                    'font-sans text-[11px] tracking-[0.15em] uppercase px-4 py-2 rounded-xl border transition-all font-semibold shadow-2xs min-h-[38px]',
                     bookingFilter === f
-                      ? 'bg-charcoal text-cream border-charcoal'
-                      : 'bg-white text-charcoal/60 border-charcoal/15 hover:border-charcoal/30',
+                      ? 'bg-forest text-cream border-forest shadow-xs'
+                      : 'bg-white text-charcoal/70 border-charcoal/15 hover:border-charcoal/30 hover:text-charcoal',
                   )}
                 >
                   {d[f as keyof typeof d] || f}
@@ -1606,84 +1611,84 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
                 {filteredBookings.map((b) => (
                   <div
                      key={b.id}
-                     className="bg-white border border-charcoal/10 rounded-xl p-6 shadow-sm flex flex-col md:flex-row md:items-start justify-between gap-6"
+                     className="bg-white border border-charcoal/15 rounded-3xl p-6 sm:p-7 shadow-[0_4px_20px_rgba(0,0,0,0.03)] flex flex-col md:flex-row md:items-start justify-between gap-6"
                   >
                     <div className="space-y-4 flex-1">
                       <div className="flex items-center gap-3 flex-wrap">
                         <span
                           className={clsx(
-                            'font-sans text-[9px] tracking-[0.15em] uppercase px-2 py-0.5 rounded',
+                            'font-sans text-[10px] tracking-[0.15em] uppercase px-3 py-1 rounded-md font-semibold border',
                             b.type === 'full-day'
-                              ? 'bg-forest/10 text-forest'
-                              : 'bg-sage/15 text-forest/85',
+                              ? 'bg-forest/10 text-forest border-forest/20'
+                              : 'bg-forest/05 text-forest border-forest/15',
                           )}
                         >
                           {b.type === 'full-day' ? d.fullDay : d.session}
                         </span>
                         <span
                           className={clsx(
-                            'font-sans text-[9px] tracking-[0.15em] uppercase px-2 py-0.5 rounded',
-                            b.status === 'pending' && 'bg-yellow-100 text-yellow-800',
-                            b.status === 'confirmed' && 'bg-blue-100 text-blue-800',
-                            b.status === 'approved' && 'bg-green-100 text-green-800',
+                            'font-sans text-[10px] tracking-[0.15em] uppercase px-3 py-1 rounded-md font-semibold border',
+                            b.status === 'pending' && 'bg-amber-100 text-amber-900 border-amber-200',
+                            b.status === 'confirmed' && 'bg-blue-100 text-blue-900 border-blue-200',
+                            b.status === 'approved' && 'bg-emerald-100 text-emerald-900 border-emerald-200',
                           )}
                         >
                           {d[b.status as keyof typeof d] || b.status}
                         </span>
-                        <span className="font-sans text-xs text-charcoal/40">
+                        <span className="font-sans text-xs text-charcoal/55 font-medium">
                           {d.bookedOn} {new Date(b.createdAt).toLocaleDateString()}
                         </span>
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-y-4 gap-x-6">
                         <div>
-                          <p className="font-sans text-[9px] tracking-wider text-charcoal/40 uppercase mb-0.5">
+                          <p className="font-sans text-[10px] tracking-wider text-charcoal/50 uppercase mb-1 font-semibold">
                             {d.customer}
                           </p>
-                          <p className="font-serif text-lg text-charcoal">{b.customerInfo.fullName}</p>
+                          <p className="font-serif text-lg text-charcoal font-medium">{b.customerInfo.fullName}</p>
                         </div>
                         <div>
-                          <p className="font-sans text-[9px] tracking-wider text-charcoal/40 uppercase mb-0.5">
+                          <p className="font-sans text-[10px] tracking-wider text-charcoal/50 uppercase mb-1 font-semibold">
                             {d.phone}
                           </p>
-                          <a href={`tel:${b.customerInfo.phone}`} className="font-sans text-sm text-forest underline">
+                          <a href={`tel:${b.customerInfo.phone}`} className="font-sans text-sm text-forest font-semibold hover:underline">
                             {b.customerInfo.phone}
                           </a>
                         </div>
                         <div>
-                          <p className="font-sans text-[9px] tracking-wider text-charcoal/40 uppercase mb-0.5">
+                          <p className="font-sans text-[10px] tracking-wider text-charcoal/50 uppercase mb-1 font-semibold">
                             {d.email}
                           </p>
-                          <p className="font-sans text-sm text-charcoal">{b.customerInfo.email || '—'}</p>
+                          <p className="font-sans text-sm text-charcoal font-medium">{b.customerInfo.email || '—'}</p>
                         </div>
                         <div>
-                          <p className="font-sans text-[9px] tracking-wider text-charcoal/40 uppercase mb-0.5">
+                          <p className="font-sans text-[10px] tracking-wider text-charcoal/50 uppercase mb-1 font-semibold">
                             {d.cityPackage}
                           </p>
-                          <p className="font-sans text-sm text-charcoal capitalize">
+                          <p className="font-sans text-sm text-charcoal capitalize font-medium">
                             {d[b.city as keyof typeof d] || b.city} · {b.packageId ? (locale === 'ar' ? (b.packageId === 'essential' ? 'المجموعة الأساسية' : b.packageId === 'signature' ? 'المجموعة المميزة' : b.packageId === 'premium' ? 'المجموعة الفاخرة' : b.packageId === 'vip' ? 'مجموعة كبار الشخصيات' : 'المجموعة الملكية') : PACKAGE_NAMES[b.packageId] ?? b.packageId) : '—'}
                           </p>
                         </div>
                         <div>
-                          <p className="font-sans text-[9px] tracking-wider text-charcoal/40 uppercase mb-0.5">
+                          <p className="font-sans text-[10px] tracking-wider text-charcoal/50 uppercase mb-1 font-semibold">
                             {d.locationId}
                           </p>
-                          <p className="font-sans text-sm text-charcoal">{b.location}</p>
+                          <p className="font-sans text-sm text-charcoal font-medium">{b.location}</p>
                         </div>
                         <div>
-                          <p className="font-sans text-[9px] tracking-wider text-charcoal/40 uppercase mb-0.5">
+                          <p className="font-sans text-[10px] tracking-wider text-charcoal/50 uppercase mb-1 font-semibold">
                             {d.targetDate}
                           </p>
-                          <p className="font-sans text-sm text-forest font-semibold">{b.date}</p>
+                          <p className="font-sans text-sm text-forest font-bold">{b.date}</p>
                         </div>
                       </div>
 
                       {b.customerInfo.notes && (
-                        <div className="pt-2 border-t border-charcoal/05">
-                          <p className="font-sans text-[9px] tracking-wider text-charcoal/40 uppercase mb-1">
+                        <div className="pt-3 border-t border-charcoal/10">
+                          <p className="font-sans text-[10px] tracking-wider text-charcoal/50 uppercase mb-1.5 font-semibold">
                             {d.notes}
                           </p>
-                          <p className="font-sans text-xs text-charcoal/70 bg-linen/40 p-3 rounded-lg leading-relaxed">
+                          <p className="font-sans text-xs text-charcoal bg-linen/50 border border-charcoal/10 p-3.5 rounded-xl leading-relaxed">
                             {b.customerInfo.notes}
                           </p>
                         </div>
@@ -2071,7 +2076,9 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
             <div className="flex flex-wrap items-center gap-4 bg-white border border-charcoal/10 rounded-2xl p-4 shadow-sm">
               {/* City selector */}
               <div className="flex items-center gap-2">
-                <span className="font-sans text-xs text-charcoal/45 font-medium uppercase tracking-wider">{d.city}:</span>
+                <span className="font-sans text-xs text-charcoal/45 font-medium uppercase tracking-wider">
+                  {locale === 'ar' ? 'المدينة' : 'City'}:
+                </span>
                 <div className="flex gap-1 bg-linen/50 p-1 rounded-xl">
                   {(['baghdad', 'erbil'] as const).map((c) => (
                     <button
@@ -2093,7 +2100,9 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
 
               {/* Service selector */}
               <div className="flex items-center gap-2">
-                <span className="font-sans text-xs text-charcoal/45 font-medium uppercase tracking-wider">{d.service}:</span>
+                <span className="font-sans text-xs text-charcoal/45 font-medium uppercase tracking-wider">
+                  {locale === 'ar' ? 'الخدمة' : 'Service'}:
+                </span>
                 <div className="flex gap-1 bg-linen/50 p-1 rounded-xl">
                   {(['sessions', 'full-day'] as const).map((s) => (
                     <button
@@ -2105,177 +2114,24 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
                         pkgService === s ? 'bg-forest text-cream shadow-xs font-semibold' : 'text-charcoal/60 hover:text-charcoal',
                       )}
                     >
-                      {s === 'sessions' ? d.sessionsService : d.fullDayService}
+                      {s === 'sessions' ? (locale === 'ar' ? 'جلسات التصوير' : 'Sessions') : (locale === 'ar' ? 'يوم كامل' : 'Full Day')}
                     </button>
                   ))}
                 </div>
               </div>
             </div>
 
-            {/* Package Editor Cards */}
+            {/* Package Grid + Modal System */}
             {pkgLoading ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {[1, 2].map((n) => (
-                  <div key={n} className="rounded-2xl border border-charcoal/10 bg-white p-6 animate-pulse h-96" />
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {[1, 2, 3, 4].map((n) => (
+                  <div key={n} className="rounded-2xl border border-charcoal/10 bg-white p-5 animate-pulse h-36" />
                 ))}
               </div>
             ) : (
-              <div className="space-y-6">
-                {/* New Package Inline Creator if active */}
-                {editingPkgId && editPkgForm && (
-                  <div className="bg-sand/40 border-2 border-forest rounded-2xl p-6 shadow-md space-y-5 animate-fadeIn">
-                    <div className="flex items-center justify-between border-b border-charcoal/10 pb-3">
-                      <span className="font-serif text-lg text-charcoal font-semibold">
-                        {locale === 'ar' ? 'إنشاء باقة جديدة' : 'Create New Package'}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => { setEditingPkgId(null); setEditPkgForm(null) }}
-                        className="font-sans text-xs uppercase text-charcoal/40 hover:text-charcoal"
-                      >
-                        {d.cancel}
-                      </button>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                      <div>
-                        <label className="font-sans text-[10px] uppercase tracking-wider text-charcoal/50 block mb-1 font-semibold">{d.nameEn}</label>
-                        <input
-                          type="text"
-                          required
-                          value={editPkgForm.name}
-                          onChange={(e) => setEditPkgForm({ ...editPkgForm, name: e.target.value })}
-                          className="w-full font-sans text-xs border border-charcoal/15 rounded-xl px-3 py-2.5 outline-none focus:border-forest bg-white"
-                        />
-                      </div>
-                      <div>
-                        <label className="font-sans text-[10px] uppercase tracking-wider text-charcoal/50 block mb-1 font-semibold">{d.nameAr}</label>
-                        <input
-                          type="text"
-                          required
-                          value={editPkgForm.name_ar}
-                          onChange={(e) => setEditPkgForm({ ...editPkgForm, name_ar: e.target.value })}
-                          className="w-full font-sans text-xs border border-charcoal/15 rounded-xl px-3 py-2.5 outline-none focus:border-forest bg-white text-right"
-                        />
-                      </div>
-                      <div>
-                        <label className="font-sans text-[10px] uppercase tracking-wider text-charcoal/50 block mb-1 font-semibold">{d.priceUsd}</label>
-                        <input
-                          type="number"
-                          required
-                          value={editPkgForm.price}
-                          onChange={(e) => setEditPkgForm({ ...editPkgForm, price: Number(e.target.value) })}
-                          className="w-full font-sans text-xs border border-charcoal/15 rounded-xl px-3 py-2.5 outline-none focus:border-forest bg-white"
-                        />
-                      </div>
-                      <div>
-                        <label className="font-sans text-[10px] uppercase tracking-wider text-charcoal/50 block mb-1 font-semibold">{d.packageKey}</label>
-                        <input
-                          type="text"
-                          required
-                          value={editPkgForm.package_key}
-                          onChange={(e) => setEditPkgForm({ ...editPkgForm, package_key: e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, '') })}
-                          className="w-full font-sans text-xs border border-charcoal/15 rounded-xl px-3 py-2.5 outline-none focus:border-forest bg-white"
-                        />
-                      </div>
-                      <div>
-                        <label className="font-sans text-[10px] uppercase tracking-wider text-charcoal/50 block mb-1 font-semibold">{d.badgeEn || 'Badge (EN)'}</label>
-                        <input
-                          type="text"
-                          value={editPkgForm.badge || ''}
-                          onChange={(e) => setEditPkgForm({ ...editPkgForm, badge: e.target.value })}
-                          placeholder="e.g. Most Popular"
-                          className="w-full font-sans text-xs border border-charcoal/15 rounded-xl px-3 py-2.5 outline-none focus:border-forest bg-white"
-                        />
-                      </div>
-                      <div>
-                        <label className="font-sans text-[10px] uppercase tracking-wider text-charcoal/50 block mb-1 font-semibold">{d.badgeAr || 'Badge (AR)'}</label>
-                        <input
-                          type="text"
-                          value={editPkgForm.badge_ar || ''}
-                          onChange={(e) => setEditPkgForm({ ...editPkgForm, badge_ar: e.target.value })}
-                          placeholder="مثلاً الأكثر طلباً"
-                          className="w-full font-sans text-xs border border-charcoal/15 rounded-xl px-3 py-2.5 outline-none focus:border-forest bg-white text-right"
-                        />
-                      </div>
-                      <div>
-                        <label className="font-sans text-[10px] uppercase tracking-wider text-charcoal/50 block mb-1 font-semibold">{d.accentColorOptional}</label>
-                        <input
-                          type="text"
-                          value={editPkgForm.accent_color || ''}
-                          onChange={(e) => setEditPkgForm({ ...editPkgForm, accent_color: e.target.value })}
-                          placeholder="#12372a"
-                          className="w-full font-sans text-xs border border-charcoal/15 rounded-xl px-3 py-2.5 outline-none focus:border-forest bg-white"
-                        />
-                      </div>
-                      <div>
-                        <label className="font-sans text-[10px] uppercase tracking-wider text-charcoal/50 block mb-1 font-semibold">{d.imageUrlOptional}</label>
-                        <input
-                          type="text"
-                          value={editPkgForm.image_url || ''}
-                          onChange={(e) => setEditPkgForm({ ...editPkgForm, image_url: e.target.value })}
-                          placeholder="/images/hero.webp"
-                          className="w-full font-sans text-xs border border-charcoal/15 rounded-xl px-3 py-2.5 outline-none focus:border-forest bg-white"
-                        />
-                      </div>
-                      <div className="sm:col-span-2 lg:col-span-2">
-                        <label className="font-sans text-[10px] uppercase tracking-wider text-charcoal/50 block mb-1 font-semibold">{d.descEn}</label>
-                        <textarea
-                          value={editPkgForm.description || ''}
-                          onChange={(e) => setEditPkgForm({ ...editPkgForm, description: e.target.value })}
-                          rows={2}
-                          className="w-full font-sans text-xs border border-charcoal/15 rounded-xl px-3 py-2 outline-none focus:border-forest bg-white resize-none"
-                        />
-                      </div>
-                      <div className="sm:col-span-2 lg:col-span-2">
-                        <label className="font-sans text-[10px] uppercase tracking-wider text-charcoal/50 block mb-1 font-semibold">{d.descAr}</label>
-                        <textarea
-                          value={editPkgForm.description_ar || ''}
-                          onChange={(e) => setEditPkgForm({ ...editPkgForm, description_ar: e.target.value })}
-                          rows={2}
-                          className="w-full font-sans text-xs border border-charcoal/15 rounded-xl px-3 py-2 outline-none focus:border-forest bg-white resize-none text-right"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="flex justify-end gap-3 pt-2">
-                      <button
-                        type="button"
-                        onClick={() => { setEditingPkgId(null); setEditPkgForm(null) }}
-                        className="font-sans text-xs uppercase px-4 py-2.5 rounded-lg border border-charcoal/20 text-charcoal/60"
-                      >
-                        {d.cancel}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleSavePackage(editPkgForm)}
-                        className="font-sans text-xs tracking-wider uppercase bg-forest text-cream px-6 py-2.5 rounded-lg font-medium shadow-sm hover:bg-forest-deep transition-colors"
-                      >
-                        {d.savePackage}
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* List of existing packages */}
-                {packagesList
-                  .filter((p) => p.city === pkgCity && p.service === pkgService)
-                  .sort((a, b) => a.sort_order - b.sort_order)
-                  .map((pkg) => (
-                    <PackageEditorCard
-                      key={pkg.id}
-                      pkg={pkg}
-                      d={d}
-                      locale={locale}
-                      onSave={handleSavePackage}
-                      onDelete={handleDeletePackage}
-                      onMoveUp={() => handleMoveOrder(pkg, 'up')}
-                      onMoveDown={() => handleMoveOrder(pkg, 'down')}
-                      isSaved={pkgSaveMessage === pkg.id}
-                    />
-                  ))}
-
-                {packagesList.filter((p) => p.city === pkgCity && p.service === pkgService).length === 0 && !editingPkgId && (
+              <>
+                {/* Grid of summary cards */}
+                {packagesList.filter((p) => p.city === pkgCity && p.service === pkgService).length === 0 && !editingPkgId ? (
                   <div className="bg-white border border-charcoal/10 rounded-2xl p-12 text-center">
                     <p className="font-serif text-xl text-charcoal/40 mb-3">
                       {locale === 'ar' ? 'لا توجد باقات مدخلة لهذه المدينة والخدمة بعد.' : 'No packages found for this city and service.'}
@@ -2288,16 +2144,206 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
                       {d.addPackage}
                     </button>
                   </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {packagesList
+                      .filter((p) => p.city === pkgCity && p.service === pkgService)
+                      .sort((a, b) => a.sort_order - b.sort_order)
+                      .map((pkg) => (
+                        <button
+                          key={pkg.id}
+                          type="button"
+                          onClick={() => setActiveEditingPkg(pkg.id)}
+                          className={clsx(
+                            'group text-left bg-white rounded-2xl border p-5 shadow-sm hover:shadow-md transition-all duration-200 hover:border-forest/40 hover:-translate-y-0.5',
+                            activeEditingPkg === pkg.id ? 'border-forest ring-1 ring-forest/30' : 'border-charcoal/12',
+                          )}
+                        >
+                          <div className="flex items-start justify-between gap-2 mb-3">
+                            <div className="flex-1 min-w-0">
+                              <p className="font-serif text-lg text-charcoal font-medium truncate">{pkg.name}</p>
+                              {pkg.name_ar && (
+                                <p className="font-sans text-xs text-charcoal/45 truncate" dir="rtl">{pkg.name_ar}</p>
+                              )}
+                            </div>
+                            <p className="font-serif text-xl text-forest font-light shrink-0">${pkg.price?.toLocaleString()}</p>
+                          </div>
+                          {pkg.badge && (
+                            <span className="inline-block font-sans text-[9px] tracking-widest uppercase px-2.5 py-0.5 rounded-full bg-linen border border-charcoal/10 text-charcoal font-semibold mb-2">
+                              {pkg.badge}
+                            </span>
+                          )}
+                          <p className="font-sans text-[11px] text-charcoal/50 line-clamp-2 leading-relaxed">
+                            {pkg.description || (locale === 'ar' ? 'انقر لتعديل التفاصيل' : 'Click to edit details')}
+                          </p>
+                          <div className="flex items-center gap-1.5 mt-3 pt-3 border-t border-charcoal/08">
+                            <span className="font-sans text-[10px] text-charcoal/35 uppercase tracking-wider">{pkg.package_key}</span>
+                            <span className="text-charcoal/20">·</span>
+                            <span className="font-sans text-[10px] text-forest/60 uppercase tracking-wider group-hover:text-forest transition-colors">
+                              {locale === 'ar' ? 'تعديل ←' : 'Edit →'}
+                            </span>
+                          </div>
+                        </button>
+                      ))}
+                  </div>
                 )}
-              </div>
+
+                {/* ─── Package Edit Modal ─── */}
+                {activeEditingPkg && (() => {
+                  const pkg = packagesList.find((p) => p.id === activeEditingPkg)
+                  if (!pkg) return null
+                  return (
+                    <div
+                      className="fixed inset-0 z-50 bg-charcoal/50 backdrop-blur-sm flex items-start justify-center p-4 sm:p-6 overflow-y-auto"
+                      onClick={(e) => { if (e.target === e.currentTarget) setActiveEditingPkg(null) }}
+                    >
+                      <div className="w-full max-w-3xl bg-linen rounded-3xl shadow-2xl my-auto">
+                        <PackageEditorCard
+                          pkg={pkg}
+                          d={d}
+                          locale={locale}
+                          onSave={async (updated) => { await handleSavePackage(updated); setActiveEditingPkg(null) }}
+                          onDelete={async (id) => { await handleDeletePackage(id); setActiveEditingPkg(null) }}
+                          onMoveUp={() => handleMoveOrder(pkg, 'up')}
+                          onMoveDown={() => handleMoveOrder(pkg, 'down')}
+                          isSaved={pkgSaveMessage === pkg.id}
+                          onClose={() => setActiveEditingPkg(null)}
+                        />
+                      </div>
+                    </div>
+                  )
+                })()}
+
+                {/* ─── New Package Modal ─── */}
+                {editingPkgId && editPkgForm && (
+                  <div
+                    className="fixed inset-0 z-50 bg-charcoal/50 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6"
+                    onClick={(e) => { if (e.target === e.currentTarget) { setEditingPkgId(null); setEditPkgForm(null) } }}
+                  >
+                    <div className="w-full max-w-2xl bg-linen rounded-3xl shadow-2xl p-6 space-y-5 animate-fadeIn max-h-[90vh] overflow-y-auto">
+                      <div className="flex items-center justify-between border-b border-charcoal/10 pb-3">
+                        <span className="font-serif text-lg text-charcoal font-semibold">
+                          {locale === 'ar' ? 'إنشاء باقة جديدة' : 'Create New Package'}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => { setEditingPkgId(null); setEditPkgForm(null) }}
+                          className="font-sans text-xs uppercase text-charcoal/40 hover:text-charcoal px-3 py-1 rounded-lg border border-charcoal/15"
+                        >
+                          {d.cancel}
+                        </button>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className="font-sans text-[10px] uppercase tracking-wider text-charcoal/50 block mb-1 font-semibold">{d.nameEn}</label>
+                          <input
+                            type="text"
+                            required
+                            value={editPkgForm.name}
+                            onChange={(e) => setEditPkgForm({ ...editPkgForm, name: e.target.value })}
+                            className="w-full font-sans text-xs border border-charcoal/15 rounded-xl px-3 py-2.5 outline-none focus:border-forest bg-white"
+                          />
+                        </div>
+                        <div>
+                          <label className="font-sans text-[10px] uppercase tracking-wider text-charcoal/50 block mb-1 font-semibold">{d.nameAr}</label>
+                          <input
+                            type="text"
+                            required
+                            value={editPkgForm.name_ar}
+                            onChange={(e) => setEditPkgForm({ ...editPkgForm, name_ar: e.target.value })}
+                            className="w-full font-sans text-xs border border-charcoal/15 rounded-xl px-3 py-2.5 outline-none focus:border-forest bg-white text-right"
+                          />
+                        </div>
+                        <div>
+                          <label className="font-sans text-[10px] uppercase tracking-wider text-charcoal/50 block mb-1 font-semibold">{d.priceUsd}</label>
+                          <input
+                            type="number"
+                            required
+                            value={editPkgForm.price}
+                            onChange={(e) => setEditPkgForm({ ...editPkgForm, price: Number(e.target.value) })}
+                            className="w-full font-sans text-xs border border-charcoal/15 rounded-xl px-3 py-2.5 outline-none focus:border-forest bg-white"
+                          />
+                        </div>
+                        <div>
+                          <label className="font-sans text-[10px] uppercase tracking-wider text-charcoal/50 block mb-1 font-semibold">{d.packageKey}</label>
+                          <input
+                            type="text"
+                            required
+                            value={editPkgForm.package_key}
+                            onChange={(e) => setEditPkgForm({ ...editPkgForm, package_key: e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, '') })}
+                            className="w-full font-sans text-xs border border-charcoal/15 rounded-xl px-3 py-2.5 outline-none focus:border-forest bg-white"
+                          />
+                        </div>
+                        <div>
+                          <label className="font-sans text-[10px] uppercase tracking-wider text-charcoal/50 block mb-1 font-semibold">Badge (EN)</label>
+                          <input
+                            type="text"
+                            value={editPkgForm.badge || ''}
+                            onChange={(e) => setEditPkgForm({ ...editPkgForm, badge: e.target.value })}
+                            placeholder="e.g. Most Popular"
+                            className="w-full font-sans text-xs border border-charcoal/15 rounded-xl px-3 py-2.5 outline-none focus:border-forest bg-white"
+                          />
+                        </div>
+                        <div>
+                          <label className="font-sans text-[10px] uppercase tracking-wider text-charcoal/50 block mb-1 font-semibold">الشارة (عربي)</label>
+                          <input
+                            type="text"
+                            value={editPkgForm.badge_ar || ''}
+                            onChange={(e) => setEditPkgForm({ ...editPkgForm, badge_ar: e.target.value })}
+                            placeholder="مثلاً الأكثر طلباً"
+                            className="w-full font-sans text-xs border border-charcoal/15 rounded-xl px-3 py-2.5 outline-none focus:border-forest bg-white text-right"
+                          />
+                        </div>
+                        <div className="sm:col-span-2">
+                          <label className="font-sans text-[10px] uppercase tracking-wider text-charcoal/50 block mb-1 font-semibold">{d.descEn}</label>
+                          <textarea
+                            value={editPkgForm.description || ''}
+                            onChange={(e) => setEditPkgForm({ ...editPkgForm, description: e.target.value })}
+                            rows={2}
+                            className="w-full font-sans text-xs border border-charcoal/15 rounded-xl px-3 py-2 outline-none focus:border-forest bg-white resize-none"
+                          />
+                        </div>
+                        <div className="sm:col-span-2">
+                          <label className="font-sans text-[10px] uppercase tracking-wider text-charcoal/50 block mb-1 font-semibold">{d.descAr}</label>
+                          <textarea
+                            value={editPkgForm.description_ar || ''}
+                            onChange={(e) => setEditPkgForm({ ...editPkgForm, description_ar: e.target.value })}
+                            rows={2}
+                            className="w-full font-sans text-xs border border-charcoal/15 rounded-xl px-3 py-2 outline-none focus:border-forest bg-white resize-none text-right"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex justify-end gap-3 pt-2">
+                        <button
+                          type="button"
+                          onClick={() => { setEditingPkgId(null); setEditPkgForm(null) }}
+                          className="font-sans text-xs uppercase px-4 py-2.5 rounded-lg border border-charcoal/20 text-charcoal/60"
+                        >
+                          {d.cancel}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleSavePackage(editPkgForm)}
+                          className="font-sans text-xs tracking-wider uppercase bg-forest text-cream px-6 py-2.5 rounded-lg font-medium shadow-sm hover:bg-forest-deep transition-colors"
+                        >
+                          {d.savePackage}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </>
             )}
           </div>
         )}
 
         {/* ─── TAB: PORTFOLIO MANAGEMENT ─── */}
         {activeTab === 'portfolio' && (
-          <div className="space-y-10">
-            {/* Create Category */}
+          <div className="space-y-8">
+
+            {/* ── Create Category ── */}
             <div className="bg-white border border-charcoal/10 rounded-2xl p-6 shadow-sm max-w-xl">
               <SectionHeading title={d.portfolioCategories} desc={d.portfolioCategoriesDesc} />
               <form onSubmit={createCategory} className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -2333,148 +2379,222 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
               </form>
             </div>
 
-            {/* Categories List & Image Upload */}
-            <div className="space-y-6">
+            {/* ── Category Cards Grid ── */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {categories.map((cat) => {
                 const catImages = portfolioImgs.filter((img) => img.category === cat.id)
-                const isStatic = DEFAULT_CATEGORIES.some((c) => c.id === cat.id)
+                const previewSrc = catImages[0]
+                  ? catImages[0].id.startsWith('data:') || catImages[0].id.startsWith('blob:')
+                    ? catImages[0].id
+                    : `/images/portfolio/${catImages[0].id}-sm.webp`
+                  : null
 
                 return (
-                  <div key={cat.id} className="bg-white border border-charcoal/10 rounded-2xl p-6 shadow-sm space-y-4">
-                    <div className="flex items-start justify-between flex-wrap gap-4 border-b border-charcoal/06 pb-4">
-                      {renamingCatId === cat.id ? (
-                        <div className="flex gap-2 flex-wrap items-center">
-                          <input
-                            type="text"
-                            value={renameNameEn}
-                            onChange={(e) => setRenameNameEn(e.target.value)}
-                            className="font-sans text-xs border border-charcoal/15 rounded px-2 py-1 outline-none"
-                            placeholder="English"
-                          />
-                          <input
-                            type="text"
-                            value={renameNameAr}
-                            onChange={(e) => setRenameNameAr(e.target.value)}
-                            className="font-sans text-xs border border-charcoal/15 rounded px-2 py-1 outline-none text-right"
-                            placeholder="العربية"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => renameCategory(cat.id)}
-                            className="font-sans text-[10px] uppercase text-forest hover:underline"
-                          >
-                            {d.save}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setRenamingCatId(null)}
-                            className="font-sans text-[10px] uppercase text-charcoal/40 hover:underline"
-                          >
-                            {d.cancel}
-                          </button>
-                        </div>
+                  <button
+                    key={cat.id}
+                    type="button"
+                    onClick={() => setActiveCatModal(cat.id)}
+                    className={clsx(
+                      'group text-left bg-white rounded-2xl border shadow-sm overflow-hidden hover:shadow-md transition-all duration-200 hover:-translate-y-0.5',
+                      activeCatModal === cat.id ? 'border-forest ring-1 ring-forest/30' : 'border-charcoal/12',
+                    )}
+                  >
+                    {/* Thumbnail strip */}
+                    <div className="h-28 bg-linen relative overflow-hidden">
+                      {previewSrc ? (
+                        <img
+                          src={previewSrc}
+                          alt={cat.name}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
+                        />
                       ) : (
-                        <div>
-                          <div className="flex items-center gap-3">
-                            <h3 className="font-serif text-lg text-charcoal">{cat.name}</h3>
-                            <span className="text-charcoal/20">|</span>
-                            <span className="font-sans text-sm text-charcoal/60">{cat.nameAr}</span>
-                            <span className="font-sans text-[10px] text-charcoal/30 font-bold uppercase tracking-wider">
-                              ({cat.id})
-                            </span>
-                          </div>
-                          <p className="font-sans text-xs text-charcoal/40 mt-0.5">
-                            {catImages.length} {locale === 'ar' ? 'صور في هذا التصنيف' : 'images total in category'}
-                          </p>
+                        <div className="w-full h-full flex items-center justify-center">
+                          <span className="font-sans text-[10px] uppercase tracking-widest text-charcoal/25">
+                            {locale === 'ar' ? 'لا توجد صور' : 'No photos yet'}
+                          </span>
                         </div>
                       )}
+                      {catImages.length > 1 && (
+                        <span className="absolute top-2 right-2 font-sans text-[9px] uppercase tracking-widest bg-charcoal/60 text-cream px-2 py-0.5 rounded-full">
+                          +{catImages.length}
+                        </span>
+                      )}
+                    </div>
 
-                      <div className="flex gap-3">
+                    {/* Card body */}
+                    <div className="p-4">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="font-serif text-base text-charcoal font-medium truncate">{cat.name}</p>
+                          <p className="font-sans text-[11px] text-charcoal/45 truncate" dir="rtl">{cat.nameAr}</p>
+                        </div>
+                        <span className="font-sans text-[10px] text-charcoal/35 shrink-0 bg-linen px-2 py-0.5 rounded-full">
+                          {catImages.length} {locale === 'ar' ? 'صورة' : 'photos'}
+                        </span>
+                      </div>
+                      <p className="font-sans text-[10px] text-forest/60 uppercase tracking-wider mt-3 group-hover:text-forest transition-colors">
+                        {locale === 'ar' ? 'إدارة الصور ←' : 'Manage photos →'}
+                      </p>
+                    </div>
+                  </button>
+                )
+              })}
+
+              {categories.length === 0 && (
+                <div className="sm:col-span-2 lg:col-span-3 bg-white border border-charcoal/10 rounded-2xl p-12 text-center">
+                  <p className="font-serif text-xl text-charcoal/35">
+                    {locale === 'ar' ? 'لم يتم إنشاء أي تصنيف بعد.' : 'No categories created yet.'}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* ── Category Images Modal ── */}
+            {activeCatModal && (() => {
+              const cat = categories.find((c) => c.id === activeCatModal)
+              if (!cat) return null
+              const catImages = portfolioImgs.filter((img) => img.category === cat.id)
+              const canDelete = catImages.length === 0
+
+              return (
+                <div
+                  className="fixed inset-0 z-50 bg-charcoal/55 backdrop-blur-sm flex items-start justify-center p-4 sm:p-6 overflow-y-auto"
+                  onClick={(e) => { if (e.target === e.currentTarget) setActiveCatModal(null) }}
+                >
+                  <div className="w-full max-w-4xl bg-linen rounded-3xl shadow-2xl my-auto overflow-hidden">
+
+                    {/* Modal header */}
+                    <div className="flex items-start justify-between gap-4 p-6 border-b border-charcoal/10">
+                      <div className="flex-1 min-w-0">
+                        {renamingCatId === cat.id ? (
+                          <div className="flex gap-2 flex-wrap items-center">
+                            <input
+                              type="text"
+                              value={renameNameEn}
+                              onChange={(e) => setRenameNameEn(e.target.value)}
+                              className="font-sans text-xs border border-charcoal/15 rounded-lg px-3 py-1.5 outline-none focus:border-forest bg-white"
+                              placeholder="English"
+                            />
+                            <input
+                              type="text"
+                              value={renameNameAr}
+                              onChange={(e) => setRenameNameAr(e.target.value)}
+                              className="font-sans text-xs border border-charcoal/15 rounded-lg px-3 py-1.5 outline-none focus:border-forest bg-white text-right"
+                              placeholder="العربية"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => renameCategory(cat.id)}
+                              className="font-sans text-[10px] uppercase text-forest font-semibold"
+                            >
+                              {d.save}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setRenamingCatId(null)}
+                              className="font-sans text-[10px] uppercase text-charcoal/40"
+                            >
+                              {d.cancel}
+                            </button>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="flex items-center gap-3 flex-wrap">
+                              <h3 className="font-serif text-2xl text-charcoal">{cat.name}</h3>
+                              <span className="text-charcoal/20">|</span>
+                              <span className="font-sans text-sm text-charcoal/55">{cat.nameAr}</span>
+                            </div>
+                            <p className="font-sans text-xs text-charcoal/40 mt-0.5">
+                              {catImages.length} {locale === 'ar' ? 'صور في هذا التصنيف' : 'images in category'} · <span className="text-charcoal/30">{cat.id}</span>
+                            </p>
+                          </>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
+                        {renamingCatId !== cat.id && (
+                          <button
+                            type="button"
+                            onClick={() => { setRenamingCatId(cat.id); setRenameNameEn(cat.name); setRenameNameAr(cat.nameAr) }}
+                            className="font-sans text-[10px] uppercase text-forest hover:underline"
+                          >
+                            {d.rename}
+                          </button>
+                        )}
                         <button
                           type="button"
-                          onClick={() => {
-                            setRenamingCatId(cat.id)
-                            setRenameNameEn(cat.name)
-                            setRenameNameAr(cat.nameAr)
-                          }}
-                          className="font-sans text-[10px] uppercase text-forest hover:underline"
-                        >
-                          {d.rename}
-                        </button>
-                        <button
-                          type="button"
-                          disabled={catImages.length > 0}
-                          onClick={() => deleteCategory(cat.id)}
+                          disabled={!canDelete}
+                          onClick={() => { deleteCategory(cat.id); setActiveCatModal(null) }}
                           className={clsx(
                             'font-sans text-[10px] uppercase',
-                            catImages.length > 0
-                              ? 'text-charcoal/20 cursor-not-allowed'
-                              : 'text-red-500 hover:underline',
+                            !canDelete ? 'text-charcoal/20 cursor-not-allowed' : 'text-red-500 hover:underline',
                           )}
-                          title={catImages.length > 0 ? (locale === 'ar' ? 'لا يمكن حذف تصنيف يحتوي على صور' : 'Cannot delete category while it contains images') : ''}
+                          title={!canDelete ? (locale === 'ar' ? 'لا يمكن حذف تصنيف يحتوي على صور' : 'Remove all images first') : ''}
                         >
                           {d.deleteCat}
                         </button>
+                        <button
+                          type="button"
+                          onClick={() => setActiveCatModal(null)}
+                          className="font-sans text-[10px] uppercase text-charcoal/40 hover:text-charcoal px-3 py-1.5 border border-charcoal/15 rounded-lg"
+                        >
+                          ✕
+                        </button>
                       </div>
                     </div>
 
-                    {/* Multiple Image Upload Box */}
-                    <div className="flex items-center gap-4 bg-linen/25 p-4 rounded-xl border border-dashed border-charcoal/15">
-                      <label className="flex flex-col cursor-pointer">
-                        <span className="font-sans text-xs tracking-wider uppercase bg-forest text-cream px-4 py-2.5 rounded-lg hover:bg-forest-deep transition">
-                          {d.uploadImages}
-                        </span>
-                        <input
-                          type="file"
-                          multiple
-                          accept="image/*"
-                          className="hidden"
-                          disabled={uploading}
-                          onChange={(e) => handleImageUpload(cat.id, e.target.files)}
-                        />
-                      </label>
-                      <p className="font-sans text-[10px] text-charcoal/40">
-                        {d.uploadDesc}
-                      </p>
+                    {/* Upload box */}
+                    <div className="px-6 pt-5">
+                      <div className="flex items-center gap-4 bg-white p-4 rounded-xl border border-dashed border-charcoal/15">
+                        <label className="flex flex-col cursor-pointer shrink-0">
+                          <span className="font-sans text-xs tracking-wider uppercase bg-forest text-cream px-4 py-2.5 rounded-lg hover:bg-forest-deep transition">
+                            {uploading ? (locale === 'ar' ? 'جاري الرفع…' : 'Uploading…') : d.uploadImages}
+                          </span>
+                          <input
+                            type="file"
+                            multiple
+                            accept="image/*"
+                            className="hidden"
+                            disabled={uploading}
+                            onChange={(e) => handleImageUpload(cat.id, e.target.files)}
+                          />
+                        </label>
+                        <p className="font-sans text-[10px] text-charcoal/40">{d.uploadDesc}</p>
+                      </div>
                     </div>
 
-                    {/* Image Previews */}
-                    {catImages.length === 0 ? (
-                      <p className="font-sans text-xs text-charcoal/30 py-4 text-center">
-                        {d.emptyCat}
-                      </p>
-                    ) : (
-                      <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3">
-                        {catImages.map((img) => {
-                          const src = img.id.startsWith('data:') || img.id.startsWith('blob:')
-                            ? img.id
-                            : `/images/portfolio/${img.id}-sm.webp`
-
-                          return (
-                            <div key={img.id} className="relative aspect-square group rounded-lg overflow-hidden border border-charcoal/06">
-                              <img
-                                src={src}
-                                alt={img.title}
-                                className="w-full h-full object-cover"
-                              />
-                              <div className="absolute inset-0 bg-charcoal/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-all">
-                                <button
-                                  type="button"
-                                  onClick={() => deletePortfolioImage(img.id)}
-                                  className="font-sans text-[9px] tracking-widest uppercase bg-red-600 text-cream px-2 py-1 rounded"
-                                >
-                                  {locale === 'ar' ? 'حذف' : 'Delete'}
-                                </button>
+                    {/* Images grid */}
+                    <div className="p-6">
+                      {catImages.length === 0 ? (
+                        <p className="font-sans text-xs text-charcoal/35 py-10 text-center">{d.emptyCat}</p>
+                      ) : (
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+                          {catImages.map((img) => {
+                            const src = img.id.startsWith('data:') || img.id.startsWith('blob:')
+                              ? img.id
+                              : `/images/portfolio/${img.id}-sm.webp`
+                            return (
+                              <div key={img.id} className="relative aspect-square group rounded-xl overflow-hidden border border-charcoal/08 shadow-sm">
+                                <img src={src} alt={img.title} className="w-full h-full object-cover" />
+                                <div className="absolute inset-0 bg-charcoal/45 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-all duration-200">
+                                  <button
+                                    type="button"
+                                    onClick={() => deletePortfolioImage(img.id)}
+                                    className="font-sans text-[9px] tracking-widest uppercase bg-red-600 text-cream px-3 py-1.5 rounded-lg"
+                                  >
+                                    {locale === 'ar' ? 'حذف' : 'Delete'}
+                                  </button>
+                                </div>
                               </div>
-                            </div>
-                          )
-                        })}
-                      </div>
-                    )}
+                            )
+                          })}
+                        </div>
+                      )}
+                    </div>
                   </div>
-                )
-              })}
-            </div>
+                </div>
+              )
+            })()}
           </div>
         )}
       </main>

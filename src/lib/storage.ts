@@ -78,4 +78,6 @@ export const STORAGE_KEYS = {
   portfolioCategories: 'ga_portfolio_categories',
   locations: 'ga_locations',
   blockedDates: 'ga_blocked_dates',
+  deletedStaticImages: 'ga_deleted_static_images',
+  deletedCategories: 'ga_deleted_categories',
 } as const

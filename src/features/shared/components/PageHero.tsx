@@ -1,5 +1,6 @@
 import { motion } from 'motion/react'
 import { clsx } from 'clsx'
+import { useHeaderTheme } from '@/lib/hooks/useHeaderTheme'
 
 interface PageHeroProps {
   title: string
@@ -16,6 +17,8 @@ export function PageHero({
   height = 'h-[42vh] sm:h-[48vh] md:h-[55vh]',
   className,
 }: PageHeroProps) {
+  useHeaderTheme('light')
+
   return (
     <div
       className={clsx(

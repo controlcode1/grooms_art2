@@ -105,6 +105,7 @@ export const staticPortfolioImages: PortfolioImage[] = Array.from(
  */
 export function getPortfolioCategories(): CategoryInfo[] {
   const custom = storage.get<CategoryInfo[]>(STORAGE_KEYS.portfolioCategories) || []
+  const deletedIds = storage.get<string[]>(STORAGE_KEYS.deletedCategories) || []
   const all = [...DEFAULT_CATEGORIES]
   // Add any custom ones not already in defaults
   custom.forEach((c) => {
@@ -112,7 +113,7 @@ export function getPortfolioCategories(): CategoryInfo[] {
       all.push(c)
     }
   })
-  return all
+  return all.filter((c) => !deletedIds.includes(c.id))
 }
 
 /**
@@ -120,6 +121,29 @@ export function getPortfolioCategories(): CategoryInfo[] {
  */
 export function savePortfolioCategories(categories: CategoryInfo[]): void {
   storage.set(STORAGE_KEYS.portfolioCategories, categories)
+
+  // Self-heal: if any saved categories were previously in deletedCategories, activate them again
+  const deletedIds = storage.get<string[]>(STORAGE_KEYS.deletedCategories) || []
+  if (deletedIds.length > 0) {
+    const activeIds = new Set(categories.map((c) => c.id))
+    const updatedDeleted = deletedIds.filter((id) => !activeIds.has(id))
+    storage.set(STORAGE_KEYS.deletedCategories, updatedDeleted)
+  }
+}
+
+/**
+ * Delete a portfolio category, whether custom or static.
+ */
+export function deletePortfolioCategory(catId: string): void {
+  const custom = storage.get<CategoryInfo[]>(STORAGE_KEYS.portfolioCategories) || []
+  const updatedCustom = custom.filter((c) => c.id !== catId)
+  storage.set(STORAGE_KEYS.portfolioCategories, updatedCustom)
+
+  const deletedIds = storage.get<string[]>(STORAGE_KEYS.deletedCategories) || []
+  if (!deletedIds.includes(catId)) {
+    deletedIds.push(catId)
+    storage.set(STORAGE_KEYS.deletedCategories, deletedIds)
+  }
 }
 
 /**
@@ -158,7 +182,10 @@ export function getPortfolioImages(): PortfolioImage[] {
     storage.set(STORAGE_KEYS.portfolioImages, valid)
   }
 
-  return [...valid, ...staticPortfolioImages]
+  const deletedStaticIds = storage.get<string[]>(STORAGE_KEYS.deletedStaticImages) || []
+  const activeStatic = staticPortfolioImages.filter((img) => !deletedStaticIds.includes(img.id))
+
+  return [...valid, ...activeStatic]
 }
 
 /**
@@ -166,6 +193,26 @@ export function getPortfolioImages(): PortfolioImage[] {
  */
 export function savePortfolioImages(images: PortfolioImage[]): void {
   storage.set(STORAGE_KEYS.portfolioImages, images)
+}
+
+/**
+ * Delete a portfolio image, whether custom or static.
+ */
+export function deletePortfolioImage(imgId: string): void {
+  const custom = storage.get<PortfolioImage[]>(STORAGE_KEYS.portfolioImages) || []
+  const isCustom = custom.some((img) => img.id === imgId)
+
+  if (isCustom) {
+    const updated = custom.filter((img) => img.id !== imgId)
+    savePortfolioImages(updated)
+  } else {
+    // If it's a static image, track its ID in deletedStaticImages so we can filter it out
+    const deletedStaticIds = storage.get<string[]>(STORAGE_KEYS.deletedStaticImages) || []
+    if (!deletedStaticIds.includes(imgId)) {
+      deletedStaticIds.push(imgId)
+      storage.set(STORAGE_KEYS.deletedStaticImages, deletedStaticIds)
+    }
+  }
 }
 
 // Keep the legacy export for compatibility where needed, but it's recommended to call getPortfolioImages()

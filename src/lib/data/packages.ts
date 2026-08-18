@@ -5,6 +5,9 @@ export interface PackageFeatureGroup {
   title_ar?: string
   items: string[]
   items_ar?: string[]
+  type?: 'freetext'
+  en?: string
+  ar?: string
 }
 
 export interface Package {
@@ -141,6 +144,12 @@ export function getPackageDisplayFeatures(
   if (!Array.isArray(pkg.features)) return []
 
   return pkg.features.map((group) => {
+    if (group.type === 'freetext') {
+      const text = locale === 'ar' ? (group.ar || group.en || '') : (group.en || '')
+      const items = text.split('\n').map(l => l.trim()).filter(Boolean)
+      return { title: '', items }
+    }
+
     let title = group.title
     let items = group.items || []
 
@@ -234,9 +243,13 @@ export async function upsertPackage(
   }
 
   try {
+    const payload = { ...pkg }
+    if (payload.id && (payload.id.startsWith('pkg-') || payload.id.length < 30)) {
+      delete payload.id
+    }
     const { data, error } = await supabase
       .from('packages')
-      .upsert(pkg, { onConflict: 'city,service,package_key' })
+      .upsert(payload, { onConflict: 'city,service,package_key' })
       .select()
       .single()
 

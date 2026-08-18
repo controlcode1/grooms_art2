@@ -47,13 +47,13 @@ function PortfolioDetail() {
         ← {t.portfolio.backToPortfolio}
       </Link>
 
-      <div className="mt-8 frame-mat max-w-4xl">
+      <div className="mt-8 max-w-4xl overflow-hidden rounded-2xl shadow-sm">
         <img
           src={src.lg}
           srcSet={image.id.startsWith('data:') || image.id.startsWith('blob:') ? undefined : `${src.md} 960w, ${src.lg} 1600w`}
           sizes={image.id.startsWith('data:') || image.id.startsWith('blob:') ? undefined : "(min-width: 768px) 70vw, 100vw"}
           alt={image.alt}
-          className="w-full h-auto"
+          className="w-full h-auto block"
         />
       </div>
 

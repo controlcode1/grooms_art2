@@ -105,4 +105,103 @@
     will-change: transform;
     transform: translateZ(0);
   }
+
+  @keyframes float-scroll-up {
+    0% {
+      transform: translateY(0);
+    }
+    100% {
+      transform: translateY(-50%);
+    }
+  }
+
+  @keyframes float-scroll-down {
+    0% {
+      transform: translateY(-50%);
+    }
+    100% {
+      transform: translateY(0);
+    }
+  }
+
+  .animate-float-up-slow {
+    animation: float-scroll-up 46s linear infinite;
+  }
+  .animate-float-up-medium {
+    animation: float-scroll-up 35s linear infinite;
+  }
+  .animate-float-up-fast {
+    animation: float-scroll-up 28s linear infinite;
+  }
+
+  .animate-float-down-slow {
+    animation: float-scroll-down 42s linear infinite;
+  }
+  .animate-float-down-medium {
+    animation: float-scroll-down 33s linear infinite;
+  }
+  .animate-float-down-fast {
+    animation: float-scroll-down 26s linear infinite;
+  }
+
+  /* ─── Organic Mesh Gradient Animations (Dark Beige / Nude Footer) ─── */
+  @keyframes mesh-drift-1 {
+    0%, 100% {
+      transform: translate3d(0, 0, 0) scale(1);
+    }
+    33% {
+      transform: translate3d(10%, 14%, 0) scale(1.15);
+    }
+    66% {
+      transform: translate3d(-12%, 8%, 0) scale(0.92);
+    }
+  }
+
+  @keyframes mesh-drift-2 {
+    0%, 100% {
+      transform: translate3d(0, 0, 0) scale(1);
+    }
+    33% {
+      transform: translate3d(-14%, -10%, 0) scale(1.12);
+    }
+    66% {
+      transform: translate3d(8%, -15%, 0) scale(1.22);
+    }
+  }
+
+  @keyframes mesh-drift-3 {
+    0%, 100% {
+      transform: translate3d(0, 0, 0) scale(1.1);
+    }
+    40% {
+      transform: translate3d(15%, -12%, 0) scale(0.9);
+    }
+    75% {
+      transform: translate3d(-8%, 14%, 0) scale(1.2);
+    }
+  }
+
+  @keyframes mesh-drift-4 {
+    0%, 100% {
+      transform: translate3d(0, 0, 0) scale(0.95);
+    }
+    50% {
+      transform: translate3d(-16%, 16%, 0) scale(1.25);
+    }
+  }
+
+  .animate-mesh-1 {
+    animation: mesh-drift-1 20s ease-in-out infinite;
+  }
+  .animate-mesh-2 {
+    animation: mesh-drift-2 26s ease-in-out infinite;
+  }
+  .animate-mesh-3 {
+    animation: mesh-drift-3 22s ease-in-out infinite;
+  }
+  .animate-mesh-4 {
+    animation: mesh-drift-4 30s ease-in-out infinite;
+  }
 }
+
+

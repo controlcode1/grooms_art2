@@ -66,11 +66,6 @@ export function MasonryGrid({ images, loading = false, pageSize = 9 }: MasonryGr
                 loading={i < 4 ? 'eager' : 'lazy'}
                 className="w-full h-auto object-cover group-hover:scale-[1.03] transition-transform duration-[1200ms] ease-[cubic-bezier(0.16,1,0.3,1)]"
               />
-              <div className="px-1 pt-2 pb-1 flex items-center justify-between">
-                <span className="font-sans text-xs tracking-wide text-charcoal/60">
-                  {img.title}
-                </span>
-              </div>
             </motion.button>
           )
         })}
