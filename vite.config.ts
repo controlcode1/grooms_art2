@@ -14,8 +14,23 @@ export default defineConfig({
   plugins: [
     tailwindcss(),
     tanstackStart(),
-    nitro(),
+    nitro({
+      routeRules: {
+        // ── Public pages — ISR 5 min ──────────────────────────────────
+        '/':              { isr: 300 },
+        '/about':         { isr: 3600 },
+        '/portfolio':     { isr: 300 },
+        '/portfolio/**':  { isr: 300 },
+
+        // ── Interactive / private — no cache ─────────────────────────
+        '/book-session':  { cache: false },
+        '/sessions':      { cache: false },
+        '/full-day':      { cache: false },
+        '/dashboard/**':  { cache: false },
+      },
+    }),
     viteReact(),
   ],
 })
+
 
