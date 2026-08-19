@@ -46,8 +46,13 @@ export const getPresignedUploadUrl = createServerFn({ method: 'POST' })
     const uploadUrl = await getSignedUrl(s3Client, command, { expiresIn: 300 })
 
     // Build the public access URL
-    const baseUrl = publicUrl
-      ? (publicUrl.endsWith('/') ? publicUrl : `${publicUrl}/`)
+    let formattedPublicUrl = publicUrl ? publicUrl.trim() : ''
+    if (formattedPublicUrl && !formattedPublicUrl.startsWith('http://') && !formattedPublicUrl.startsWith('https://')) {
+      formattedPublicUrl = `https://${formattedPublicUrl}`
+    }
+
+    const baseUrl = formattedPublicUrl
+      ? (formattedPublicUrl.endsWith('/') ? formattedPublicUrl : `${formattedPublicUrl}/`)
       : `https://${bucketName}.${accountId}.r2.dev/`
     const fileUrl = `${baseUrl}${key}`
 

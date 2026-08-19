@@ -302,6 +302,11 @@ export async function getPortfolioImages(): Promise<PortfolioImage[]> {
 
   // Drop any entry whose id is an unresolvable legacy format (e.g. upload-*).
   const valid = custom.filter((img) => isValidImageId(img.id))
+  valid.forEach((img) => {
+    if (img.url) {
+      dbImageUrls.set(img.id, img.url)
+    }
+  })
 
   // Self-heal: persist the cleaned list so orphans don't persist across reloads.
   if (valid.length !== custom.length) {
@@ -318,6 +323,13 @@ export async function getPortfolioImages(): Promise<PortfolioImage[]> {
  * Save custom uploaded portfolio images.
  */
 export async function savePortfolioImages(images: PortfolioImage[]): Promise<void> {
+  // Populate in-memory map immediately so imageSrcSet can resolve new URLs synchronously
+  images.forEach((img) => {
+    if (img.url) {
+      dbImageUrls.set(img.id, img.url)
+    }
+  })
+
   storage.set(STORAGE_KEYS.portfolioImages, images)
 
   if (isSupabaseConfigured && supabase) {
@@ -449,6 +461,15 @@ export function imageSrcSet(id: string) {
       sm: dbUrl,
       md: dbUrl,
       lg: dbUrl,
+    }
+  }
+
+  // If the ID itself is a full http(s) URL
+  if (id.startsWith('http://') || id.startsWith('https://')) {
+    return {
+      sm: id,
+      md: id,
+      lg: id,
     }
   }
 

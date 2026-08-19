@@ -20,11 +20,17 @@ create table if not exists public.portfolio_images (
   part_of_full_day boolean not null default false,
   orientation      text not null check (orientation in ('landscape', 'portrait', 'square')),
   exif             jsonb not null default '{}'::jsonb,
-  url              text not null, -- The Cloudflare R2 public URL
-  r2_key           text,          -- The Cloudflare R2 object key
+  url              text not null default '', -- The Cloudflare R2 public URL
+  r2_key           text,                     -- The Cloudflare R2 object key
   file_size        bigint not null default 0, -- File size in bytes
   created_at       timestamptz not null default now()
 );
+
+-- Ensure all columns exist if table was created previously
+alter table public.portfolio_images add column if not exists exif jsonb not null default '{}'::jsonb;
+alter table public.portfolio_images add column if not exists url text not null default '';
+alter table public.portfolio_images add column if not exists r2_key text;
+alter table public.portfolio_images add column if not exists file_size bigint not null default 0;
 
 -- Enable Row Level Security (RLS)
 alter table public.portfolio_categories enable row level security;
