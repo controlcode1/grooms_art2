@@ -1,5 +1,7 @@
 import { storage, STORAGE_KEYS } from '@/lib/storage'
 import { idbGetAllImages, idbDeleteImage } from '@/lib/imageDb'
+import { supabase, isSupabaseConfigured } from '@/lib/supabase/client'
+import { deleteFromR2 } from '@/lib/r2'
 
 export type PortfolioCategory = string
 
@@ -10,7 +12,7 @@ export interface PortfolioImage {
   alt: string
   category: PortfolioCategory
   partOfFullDay: boolean
-  orientation: 'landscape' | 'portrait'
+  orientation: 'landscape' | 'portrait' | 'square'
   exif: {
     camera: string
     lens: string
@@ -19,6 +21,9 @@ export interface PortfolioImage {
     shutter: string
     iso: string
   }
+  url?: string
+  r2Key?: string
+  fileSize?: number  // file size in bytes
 }
 
 const PORTRAIT_FRAMES = new Set(['frame-05', 'frame-07', 'frame-12'])
@@ -71,13 +76,60 @@ export const DEFAULT_CATEGORIES: CategoryInfo[] = [
 
 export const staticPortfolioImages: PortfolioImage[] = []
 
-// ─── Dynamic Getters (Interfacing with storage) ──────────────────────────────
+// ─── Dynamic Getters (Interfacing with storage and database) ─────────────────
+
+// Map to cache database-fetched custom image URLs by ID for synchronous resolution in imageSrcSet
+const dbImageUrls = new Map<string, string>()
+
+/** Storage limit: 9 GB in bytes */
+export const STORAGE_LIMIT_BYTES = 9 * 1024 * 1024 * 1024
+
+/**
+ * Returns the total bytes used by all uploaded images in Supabase.
+ * Falls back to 0 if Supabase is not configured.
+ */
+export async function getStorageUsedBytes(): Promise<number> {
+  if (!isSupabaseConfigured || !supabase) return 0
+  try {
+    const { data, error } = await supabase
+      .from('portfolio_images')
+      .select('file_size')
+    if (error) {
+      // Column might not exist yet if SQL migration wasn't run
+      return 0
+    }
+    return (data || []).reduce((sum, row) => sum + (Number(row.file_size) || 0), 0)
+  } catch {
+    return 0
+  }
+}
 
 /**
  * Load all portfolio categories dynamically.
  * Combines base static categories with any custom ones managed in the dashboard.
  */
-export function getPortfolioCategories(): CategoryInfo[] {
+export async function getPortfolioCategories(): Promise<CategoryInfo[]> {
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const { data, error } = await supabase
+        .from('portfolio_categories')
+        .select('*')
+        .order('created_at', { ascending: true })
+
+      if (error) throw error
+
+      if (data && data.length > 0) {
+        return data.map((c) => ({
+          id: c.id,
+          name: c.name,
+          nameAr: c.name_ar,
+        }))
+      }
+    } catch (err) {
+      console.error('[portfolio] Failed to fetch categories from Supabase, trying fallback:', err)
+    }
+  }
+
   const custom = storage.get<CategoryInfo[]>(STORAGE_KEYS.portfolioCategories) || []
   const deletedIds = storage.get<string[]>(STORAGE_KEYS.deletedCategories) || []
   const all = [...DEFAULT_CATEGORIES]
@@ -93,7 +145,7 @@ export function getPortfolioCategories(): CategoryInfo[] {
 /**
  * Save custom portfolio categories.
  */
-export function savePortfolioCategories(categories: CategoryInfo[]): void {
+export async function savePortfolioCategories(categories: CategoryInfo[]): Promise<void> {
   storage.set(STORAGE_KEYS.portfolioCategories, categories)
 
   // Self-heal: if any saved categories were previously in deletedCategories, activate them again
@@ -103,12 +155,31 @@ export function savePortfolioCategories(categories: CategoryInfo[]): void {
     const updatedDeleted = deletedIds.filter((id) => !activeIds.has(id))
     storage.set(STORAGE_KEYS.deletedCategories, updatedDeleted)
   }
+
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const dbCategories = categories.map((c) => ({
+        id: c.id,
+        name: c.name,
+        name_ar: c.nameAr,
+      }))
+
+      const { error } = await supabase
+        .from('portfolio_categories')
+        .upsert(dbCategories, { onConflict: 'id' })
+
+      if (error) throw error
+    } catch (err) {
+      console.error('[portfolio] Failed to save categories to Supabase:', err)
+      throw err
+    }
+  }
 }
 
 /**
  * Delete a portfolio category, whether custom or static.
  */
-export function deletePortfolioCategory(catId: string): void {
+export async function deletePortfolioCategory(catId: string): Promise<void> {
   const custom = storage.get<CategoryInfo[]>(STORAGE_KEYS.portfolioCategories) || []
   const updatedCustom = custom.filter((c) => c.id !== catId)
   storage.set(STORAGE_KEYS.portfolioCategories, updatedCustom)
@@ -117,6 +188,20 @@ export function deletePortfolioCategory(catId: string): void {
   if (!deletedIds.includes(catId)) {
     deletedIds.push(catId)
     storage.set(STORAGE_KEYS.deletedCategories, deletedIds)
+  }
+
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const { error } = await supabase
+        .from('portfolio_categories')
+        .delete()
+        .eq('id', catId)
+
+      if (error) throw error
+    } catch (err) {
+      console.error('[portfolio] Failed to delete category in Supabase:', err)
+      throw err
+    }
   }
 }
 
@@ -176,7 +261,43 @@ export function cacheIdbImage(id: string, dataUrl: string): void {
  * real asset, and persists the cleaned list back to storage so the bad
  * entries don't accumulate across reloads.
  */
-export function getPortfolioImages(): PortfolioImage[] {
+export async function getPortfolioImages(): Promise<PortfolioImage[]> {
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const { data, error } = await supabase
+        .from('portfolio_images')
+        .select('*')
+        .order('created_at', { ascending: false })
+
+      if (error) throw error
+
+      if (data) {
+        // Cache URLs in memory for synchronous lookup in imageSrcSet
+        data.forEach((img) => {
+          if (img.url) {
+            dbImageUrls.set(img.id, img.url)
+          }
+        })
+
+        return data.map((img) => ({
+          id: img.id,
+          slug: img.slug,
+          title: img.title,
+          alt: img.alt || '',
+          category: img.category,
+          partOfFullDay: img.part_of_full_day,
+          orientation: img.orientation,
+          exif: img.exif || {},
+          url: img.url,
+          r2Key: img.r2_key,
+          fileSize: img.file_size || 0,
+        }))
+      }
+    } catch (err) {
+      console.error('[portfolio] Failed to fetch images from Supabase, trying fallback:', err)
+    }
+  }
+
   const custom = storage.get<PortfolioImage[]>(STORAGE_KEYS.portfolioImages) || []
 
   // Drop any entry whose id is an unresolvable legacy format (e.g. upload-*).
@@ -196,21 +317,106 @@ export function getPortfolioImages(): PortfolioImage[] {
 /**
  * Save custom uploaded portfolio images.
  */
-export function savePortfolioImages(images: PortfolioImage[]): void {
+export async function savePortfolioImages(images: PortfolioImage[]): Promise<void> {
   storage.set(STORAGE_KEYS.portfolioImages, images)
+
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const dbImages = images.map((img) => ({
+        id: img.id,
+        slug: img.slug,
+        title: img.title,
+        alt: img.alt || '',
+        category: img.category,
+        part_of_full_day: img.partOfFullDay,
+        orientation: img.orientation,
+        exif: img.exif || {},
+        url: img.url || '',
+        r2_key: img.r2Key || null,
+        file_size: img.fileSize || 0,
+      }))
+
+      const { error } = await supabase
+        .from('portfolio_images')
+        .upsert(dbImages, { onConflict: 'id' })
+
+      if (error) throw error
+    } catch (err) {
+      console.error('[portfolio] Failed to save images to Supabase:', err)
+      throw err
+    }
+  }
 }
 
 /**
  * Delete a portfolio image, whether custom or static.
  */
-export function deletePortfolioImage(imgId: string): void {
+export async function deletePortfolioImage(imgId: string): Promise<void> {
   const custom = storage.get<PortfolioImage[]>(STORAGE_KEYS.portfolioImages) || []
-  const isCustom = custom.some((img) => img.id === imgId)
+  const customImg = custom.find((img) => img.id === imgId)
 
-  if (isCustom) {
+  // Fetch all images from DB to check if it's there
+  let dbImg: PortfolioImage | undefined
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const { data, error } = await supabase
+        .from('portfolio_images')
+        .select('*')
+        .eq('id', imgId)
+        .maybeSingle()
+
+      if (error) throw error
+      if (data) {
+        dbImg = {
+          id: data.id,
+          slug: data.slug,
+          title: data.title,
+          alt: data.alt,
+          category: data.category,
+          partOfFullDay: data.part_of_full_day,
+          orientation: data.orientation,
+          exif: data.exif,
+          url: data.url,
+          r2Key: data.r2_key,
+        }
+      }
+    } catch (err) {
+      console.error('[portfolio] Failed to find image to delete in Supabase:', err)
+    }
+  }
+
+  const isCustom = Boolean(customImg || dbImg)
+  const targetImg = customImg || dbImg
+
+  if (isCustom && targetImg) {
+    // 1. Delete from Supabase
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { error } = await supabase
+          .from('portfolio_images')
+          .delete()
+          .eq('id', imgId)
+
+        if (error) throw error
+      } catch (err) {
+        console.error('[portfolio] Failed to delete image from Supabase:', err)
+      }
+    }
+
+    // 2. Delete from Cloudflare R2 if it has an R2 key
+    if (targetImg.r2Key) {
+      try {
+        await deleteFromR2({ data: { key: targetImg.r2Key } })
+      } catch (err) {
+        console.error('[portfolio] Failed to delete file from R2:', err)
+      }
+    }
+
+    // 3. Sync local fallback storage
     const updated = custom.filter((img) => img.id !== imgId)
-    savePortfolioImages(updated)
+    storage.set(STORAGE_KEYS.portfolioImages, updated)
     idbImageCache.delete(imgId)
+    dbImageUrls.delete(imgId)
     idbDeleteImage(imgId).catch((err) => console.error('[portfolio] Failed to delete image from IndexedDB:', err))
   } else {
     // If it's a static image, track its ID in deletedStaticImages so we can filter it out
@@ -236,6 +442,16 @@ export function isInlineImage(id: string): boolean {
 }
 
 export function imageSrcSet(id: string) {
+  // Check the DB-URL map first (for Cloudflare R2 images)
+  const dbUrl = dbImageUrls.get(id)
+  if (dbUrl) {
+    return {
+      sm: dbUrl,
+      md: dbUrl,
+      lg: dbUrl,
+    }
+  }
+
   // If id is a base64 / data URL (custom uploaded image), return it directly for all sizes
   if (id.startsWith('data:') || id.startsWith('blob:')) {
     return {
@@ -259,6 +475,7 @@ export function imageSrcSet(id: string) {
     lg: `/images/portfolio/${id}-lg.webp`,
   }
 }
+
 
 export const fullDayChapters = [
   { key: 'morning', frames: staticPortfolioImages.slice(0, 6) },

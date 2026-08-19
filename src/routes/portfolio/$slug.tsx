@@ -5,10 +5,16 @@ import { imageSrcSet, getPortfolioImages, preloadIdbImages, isInlineImage } from
 import { useI18n } from '@/lib/i18n'
 
 export const Route = createFileRoute('/portfolio/$slug')({
-  loader: ({ params }) => {
-    const image = getPortfolioImages().find((img) => img.slug === params.slug)
+  loader: async ({ params }) => {
+    const images = await getPortfolioImages()
+    const image = images.find((img) => img.slug === params.slug)
     if (!image) throw notFound()
-    return { image }
+
+    const related = images
+      .filter((img) => img.category === image.category && img.id !== image.id)
+      .slice(0, 3)
+
+    return { image, related }
   },
   head: ({ loaderData }) => ({
     meta: loaderData
@@ -31,7 +37,7 @@ export const Route = createFileRoute('/portfolio/$slug')({
 })
 
 function PortfolioDetail() {
-  const { image } = Route.useLoaderData()
+  const { image, related } = Route.useLoaderData()
   const { t } = useI18n()
   const [, forceUpdate] = useState(0)
 
@@ -40,10 +46,6 @@ function PortfolioDetail() {
   }, [])
 
   const src = imageSrcSet(image.id)
-
-  const related = getPortfolioImages()
-    .filter((img) => img.category === image.category && img.id !== image.id)
-    .slice(0, 3)
 
   return (
     <Section className="pt-32 pb-24 md:pt-40 md:pb-32">

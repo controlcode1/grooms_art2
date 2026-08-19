@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
 import { clsx } from 'clsx'
 import { PalmEmblem } from '@/features/shared/components/PalmEmblem'
@@ -17,10 +17,13 @@ import {
   preloadIdbImages,
   cacheIdbImage,
   imageSrcSet,
+  getStorageUsedBytes,
+  STORAGE_LIMIT_BYTES,
   type PortfolioImage,
   type CategoryInfo,
 } from '@/lib/data/portfolio'
 import { idbSaveImage } from '@/lib/imageDb'
+import { getPresignedUploadUrl } from '@/lib/r2'
 import {
   getLocationsForCity,
   DEFAULT_LOCATIONS,
@@ -1352,18 +1355,41 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
   const [renameNameEn, setRenameNameEn] = useState('')
   const [renameNameAr, setRenameNameAr] = useState('')
   const [uploading, setUploading] = useState(false)
+  const [storageUsedBytes, setStorageUsedBytes] = useState(0)
+  const [storageToastVisible, setStorageToastVisible] = useState(false)
+  const storageToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [activeCatModal, setActiveCatModal] = useState<string | null>(null) // category id open in modal
 
   const reloadPortfolio = useCallback(() => {
-    setCategories(getPortfolioCategories())
-    preloadIdbImages().then(() => setPortfolioImgs(getPortfolioImages()))
+    getPortfolioCategories().then(setCategories)
+    preloadIdbImages().then(async () => {
+      setPortfolioImgs(await getPortfolioImages())
+    })
+    getStorageUsedBytes().then(setStorageUsedBytes)
   }, [])
 
   useEffect(() => {
     reloadPortfolio()
   }, [reloadPortfolio])
 
-  const createCategory = (e: React.FormEvent) => {
+  // ── Show storage Toast when portfolio tab is opened ──────────────────
+  useEffect(() => {
+    if (activeTab !== 'portfolio') return
+    // Small delay so the tab transition finishes first
+    const show = setTimeout(() => {
+      setStorageToastVisible(true)
+      // Auto-dismiss after 5 s
+      storageToastTimerRef.current = setTimeout(() => {
+        setStorageToastVisible(false)
+      }, 5000)
+    }, 400)
+    return () => {
+      clearTimeout(show)
+      if (storageToastTimerRef.current) clearTimeout(storageToastTimerRef.current)
+    }
+  }, [activeTab])
+
+  const createCategory = async (e: React.FormEvent) => {
     e.preventDefault()
     const id = newCatId.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-')
     if (!id || !newCatName.trim()) return
@@ -1380,7 +1406,7 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
     }
 
     const updated = [...categories, newCat]
-    savePortfolioCategories(updated)
+    await savePortfolioCategories(updated)
     setCategories(updated)
 
     setNewCatId('')
@@ -1388,7 +1414,7 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
     setNewCatNameAr('')
   }
 
-  const renameCategory = (id: string) => {
+  const renameCategory = async (id: string) => {
     if (!renameNameEn.trim()) return
     const updated = categories.map((c) => {
       if (c.id === id) {
@@ -1400,12 +1426,12 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
       }
       return c
     })
-    savePortfolioCategories(updated)
+    await savePortfolioCategories(updated)
     setCategories(updated)
     setRenamingCatId(null)
   }
 
-  const deleteCategory = (catId: string) => {
+  const deleteCategory = async (catId: string) => {
     // Check if there are any images in this category
     const hasImages = portfolioImgs.some((img) => img.category === catId)
     if (hasImages) {
@@ -1414,32 +1440,82 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
     }
 
     if (!confirm('Are you sure you want to delete this category?')) return
-    apiDeletePortfolioCategory(catId)
-    setCategories(getPortfolioCategories())
+    await apiDeletePortfolioCategory(catId)
+    setCategories(await getPortfolioCategories())
   }
 
-  const deletePortfolioImage = (imgId: string) => {
+  const deletePortfolioImage = async (imgId: string) => {
     if (!confirm('Are you sure you want to remove this image?')) return
-    apiDeletePortfolioImage(imgId)
-    setPortfolioImgs(getPortfolioImages())
+    await apiDeletePortfolioImage(imgId)
+    setPortfolioImgs(await getPortfolioImages())
   }
 
   const handleImageUpload = async (catId: string, files: FileList | null) => {
     if (!files || files.length === 0) return
     setUploading(true)
     try {
-      const customImgs = storage.get<PortfolioImage[]>(STORAGE_KEYS.portfolioImages) || []
+      // ── Storage Limit Check (9 GB) ────────────────────────────────
+      const usedBytes = await getStorageUsedBytes()
+
+      // Calculate total size of files being uploaded now
+      let pendingBytes = 0
+      for (let i = 0; i < files.length; i++) pendingBytes += files[i].size
+
+      if (usedBytes + pendingBytes > STORAGE_LIMIT_BYTES) {
+        const usedGB = (usedBytes / (1024 ** 3)).toFixed(2)
+        const pendingMB = (pendingBytes / (1024 ** 2)).toFixed(1)
+        alert(
+          `⛔ تجاوزت حد التخزين (9 GB)\n` +
+          `المستخدم حالياً: ${usedGB} GB\n` +
+          `الملفات المحددة: ${pendingMB} MB\n\n` +
+          `يرجى حذف بعض الصور القديمة أولاً.`
+        )
+        return
+      }
+      // ─────────────────────────────────────────────────────────────
+
+      const customImgs = await getPortfolioImages()
       const newItems: PortfolioImage[] = []
 
       for (let i = 0; i < files.length; i++) {
         const file = files[i]
+        
+        // 1. Optimize file to a WebP DataURL locally
         const dataUrl = await optimizeToWebP(file)
+        
+        // 2. Convert DataURL to Blob
+        const blobRes = await fetch(dataUrl)
+        const blob = await blobRes.blob()
+
+        // 3. Setup metadata
         const id = `img-${crypto.randomUUID()}`
         const title = file.name.replace(/\.[^/.]+$/, '') // file name without ext
+        const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
+
+        // 4. Request S3 presigned URL from Vercel (server-side function)
+        const presigned = await getPresignedUploadUrl({
+          data: {
+            filename: `${slug}-${id.slice(-6)}.webp`,
+            contentType: 'image/webp',
+          },
+        })
+
+        // 5. Upload directly to Cloudflare R2
+        const uploadRes = await fetch(presigned.uploadUrl, {
+          method: 'PUT',
+          body: blob,
+          headers: {
+            'Content-Type': 'image/webp',
+          },
+        })
+
+        if (!uploadRes.ok) {
+          throw new Error(`Failed to upload ${file.name} to Cloudflare R2`)
+        }
 
         const newItem: PortfolioImage = {
           id,
-          slug: title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''),
+          slug,
           title,
           alt: `${title} - portfolio upload`,
           category: catId,
@@ -1453,21 +1529,20 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
             shutter: '—',
             iso: '—',
           },
+          url: presigned.fileUrl,
+          r2Key: presigned.key,
+          fileSize: blob.size, // Save actual WebP blob size
         }
 
-        // Store the (potentially large) data-URL in IndexedDB, not localStorage,
-        // to avoid silently hitting the ~5-10MB localStorage quota.
-        await idbSaveImage({ ...newItem, dataUrl })
-        cacheIdbImage(id, dataUrl)
         newItems.push(newItem)
       }
 
       const updated = [...newItems, ...customImgs]
-      savePortfolioImages(updated)
-      setPortfolioImgs(getPortfolioImages())
+      await savePortfolioImages(updated)
+      setPortfolioImgs(await getPortfolioImages())
     } catch (err) {
       console.error(err)
-      alert('Failed to optimize or upload images.')
+      alert(err instanceof Error ? err.message : 'Failed to upload images.')
     } finally {
       setUploading(false)
     }
@@ -2641,6 +2716,96 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
           </div>
         )}
       </main>
+
+      {/* ─── Storage Toast Notification ─── */}
+      {storageToastVisible && (() => {
+        const usedGB    = storageUsedBytes / (1024 ** 3)
+        const limitGB   = 9
+        const pct       = Math.min((usedGB / limitGB) * 100, 100)
+        const freeGB    = Math.max(limitGB - usedGB, 0)
+        const isWarning = pct >= 70 && pct < 90
+        const isDanger  = pct >= 90
+
+        const barColor = isDanger
+          ? 'bg-red-500'
+          : isWarning
+            ? 'bg-amber-400'
+            : 'bg-forest'
+
+        const iconColor = isDanger
+          ? 'text-red-500'
+          : isWarning
+            ? 'text-amber-500'
+            : 'text-forest'
+
+        const icon = isDanger ? '⚠️' : isWarning ? '🟡' : '🗄️'
+
+        const label = isDanger
+          ? (locale === 'ar' ? 'التخزين شارف على الامتلاء!' : 'Storage almost full!')
+          : isWarning
+            ? (locale === 'ar' ? 'التخزين مرتفع' : 'Storage getting high')
+            : (locale === 'ar' ? 'مساحة التخزين' : 'Storage usage')
+
+        return (
+          <div
+            className={clsx(
+              'fixed bottom-6 right-6 z-[9999] w-72 rounded-2xl shadow-2xl border backdrop-blur-sm p-4',
+              'transition-all duration-500 animate-in slide-in-from-bottom-4 fade-in',
+              isDanger
+                ? 'bg-red-50/95 border-red-200'
+                : isWarning
+                  ? 'bg-amber-50/95 border-amber-200'
+                  : 'bg-white/95 border-charcoal/12',
+            )}
+          >
+            {/* Header row */}
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <span className="text-base leading-none">{icon}</span>
+                <span className={clsx('font-sans text-[11px] font-semibold tracking-wide uppercase', iconColor)}>
+                  {label}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setStorageToastVisible(false)
+                  if (storageToastTimerRef.current) clearTimeout(storageToastTimerRef.current)
+                }}
+                className="text-charcoal/35 hover:text-charcoal/70 transition-colors text-sm leading-none"
+                aria-label="Dismiss"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Progress bar */}
+            <div className="h-1.5 w-full bg-charcoal/08 rounded-full overflow-hidden mb-2">
+              <div
+                className={clsx('h-full rounded-full transition-all duration-700', barColor)}
+                style={{ width: `${pct.toFixed(1)}%` }}
+              />
+            </div>
+
+            {/* Numbers row */}
+            <div className="flex items-center justify-between">
+              <span className="font-sans text-[10px] text-charcoal/50">
+                {usedGB.toFixed(2)} GB {locale === 'ar' ? 'من' : 'of'} {limitGB} GB
+              </span>
+              <span className={clsx('font-sans text-[10px] font-bold', iconColor)}>
+                {pct.toFixed(0)}%
+              </span>
+            </div>
+
+            {/* Free space */}
+            <p className="font-sans text-[10px] text-charcoal/40 mt-1">
+              {locale === 'ar'
+                ? `المتبقي: ${freeGB.toFixed(2)} GB`
+                : `Free: ${freeGB.toFixed(2)} GB`}
+            </p>
+          </div>
+        )
+      })()}
     </div>
   )
 }

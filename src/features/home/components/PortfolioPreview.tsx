@@ -4,7 +4,7 @@ import { motion } from 'motion/react'
 import { clsx } from 'clsx'
 import { useI18n } from '@/lib/i18n'
 import { Section, Eyebrow } from '@/features/shared/components/Section'
-import { imageSrcSet, getPortfolioImages, preloadIdbImages } from '@/lib/data/portfolio'
+import { imageSrcSet, getPortfolioImages, preloadIdbImages, type PortfolioImage } from '@/lib/data/portfolio'
 
 const PREVIEW_IDS = ['frame-03', 'frame-10', 'frame-07', 'frame-18', 'frame-22', 'frame-25']
 
@@ -12,14 +12,13 @@ export function PortfolioPreview() {
   const { t, locale } = useI18n()
   const [activeIdx, setActiveIdx] = useState<number | null>(null)
 
-  // Start empty so the very first client render matches the server (which has
-  // no access to localStorage/IndexedDB) — populated client-side after mount
+  // Start empty so the very first client render matches the server
   // to avoid a hydration mismatch.
-  const [previewImages, setPreviewImages] = useState<ReturnType<typeof getPortfolioImages>>([])
+  const [previewImages, setPreviewImages] = useState<PortfolioImage[]>([])
 
   useEffect(() => {
-    preloadIdbImages().then(() => {
-      const allImgs = getPortfolioImages()
+    preloadIdbImages().then(async () => {
+      const allImgs = await getPortfolioImages()
       const activePreview = PREVIEW_IDS.map((id) =>
         allImgs.find((img) => img.id === id),
       ).filter(Boolean) as typeof allImgs

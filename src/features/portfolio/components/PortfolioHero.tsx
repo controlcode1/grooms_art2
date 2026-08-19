@@ -20,7 +20,9 @@ export function PortfolioHero({ onSelectCategory, activeCategory }: PortfolioHer
   const [isMobile, setIsMobile] = useState(false)
 
   useEffect(() => {
-    preloadIdbImages().then(() => setImages(getPortfolioImages()))
+    preloadIdbImages().then(async () => {
+      setImages(await getPortfolioImages())
+    })
 
     const checkMobile = () => {
       setIsMobile(window.innerWidth < 768)

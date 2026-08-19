@@ -40,11 +40,15 @@ function PortfolioPage() {
   const [allImages, setAllImages] = useState<PortfolioImage[]>(staticPortfolioImages)
   const [allCategories, setAllCategories] = useState<CategoryInfo[]>(DEFAULT_CATEGORIES)
 
-  // Load client-side local storage modifications after mounting
+  // Load database modifications after mounting
   useEffect(() => {
-    preloadIdbImages().then(() => {
-      setAllImages(getPortfolioImages())
-      setAllCategories(getPortfolioCategories())
+    preloadIdbImages().then(async () => {
+      const [images, categories] = await Promise.all([
+        getPortfolioImages(),
+        getPortfolioCategories(),
+      ])
+      setAllImages(images)
+      setAllCategories(categories)
     })
   }, [])
 
