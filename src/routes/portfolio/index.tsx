@@ -8,6 +8,7 @@ import {
   getPortfolioCategories,
   staticPortfolioImages,
   DEFAULT_CATEGORIES,
+  preloadIdbImages,
   type PortfolioImage,
   type CategoryInfo,
 } from '@/lib/data/portfolio'
@@ -41,8 +42,10 @@ function PortfolioPage() {
 
   // Load client-side local storage modifications after mounting
   useEffect(() => {
-    setAllImages(getPortfolioImages())
-    setAllCategories(getPortfolioCategories())
+    preloadIdbImages().then(() => {
+      setAllImages(getPortfolioImages())
+      setAllCategories(getPortfolioCategories())
+    })
   }, [])
 
   // Build filter options

@@ -3,7 +3,7 @@ import { motion, useMotionValue, useSpring, useTransform } from 'motion/react'
 import { clsx } from 'clsx'
 import { useI18n } from '@/lib/i18n'
 import { useHeaderTheme } from '@/lib/hooks/useHeaderTheme'
-import { getPortfolioImages, imageSrcSet, type PortfolioImage } from '@/lib/data/portfolio'
+import { getPortfolioImages, imageSrcSet, preloadIdbImages, type PortfolioImage } from '@/lib/data/portfolio'
 import type { FilterValue } from '@/features/portfolio/components/CategoryFilter'
 
 interface PortfolioHeroProps {
@@ -20,7 +20,7 @@ export function PortfolioHero({ onSelectCategory, activeCategory }: PortfolioHer
   const [isMobile, setIsMobile] = useState(false)
 
   useEffect(() => {
-    setImages(getPortfolioImages())
+    preloadIdbImages().then(() => setImages(getPortfolioImages()))
 
     const checkMobile = () => {
       setIsMobile(window.innerWidth < 768)

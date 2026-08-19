@@ -1,6 +1,7 @@
 import { createFileRoute, Link, notFound } from '@tanstack/react-router'
+import { useEffect, useState } from 'react'
 import { Section } from '@/features/shared/components/Section'
-import { imageSrcSet, getPortfolioImages } from '@/lib/data/portfolio'
+import { imageSrcSet, getPortfolioImages, preloadIdbImages, isInlineImage } from '@/lib/data/portfolio'
 import { useI18n } from '@/lib/i18n'
 
 export const Route = createFileRoute('/portfolio/$slug')({
@@ -32,6 +33,12 @@ export const Route = createFileRoute('/portfolio/$slug')({
 function PortfolioDetail() {
   const { image } = Route.useLoaderData()
   const { t } = useI18n()
+  const [, forceUpdate] = useState(0)
+
+  useEffect(() => {
+    preloadIdbImages().then(() => forceUpdate((n) => n + 1))
+  }, [])
+
   const src = imageSrcSet(image.id)
 
   const related = getPortfolioImages()
@@ -50,8 +57,8 @@ function PortfolioDetail() {
       <div className="mt-8 max-w-4xl overflow-hidden rounded-2xl shadow-sm">
         <img
           src={src.lg}
-          srcSet={image.id.startsWith('data:') || image.id.startsWith('blob:') ? undefined : `${src.md} 960w, ${src.lg} 1600w`}
-          sizes={image.id.startsWith('data:') || image.id.startsWith('blob:') ? undefined : "(min-width: 768px) 70vw, 100vw"}
+          srcSet={isInlineImage(image.id) ? undefined : `${src.md} 960w, ${src.lg} 1600w`}
+          sizes={isInlineImage(image.id) ? undefined : "(min-width: 768px) 70vw, 100vw"}
           alt={image.alt}
           className="w-full h-auto block"
         />

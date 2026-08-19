@@ -14,9 +14,13 @@ import {
   DEFAULT_CATEGORIES,
   deletePortfolioImage as apiDeletePortfolioImage,
   deletePortfolioCategory as apiDeletePortfolioCategory,
+  preloadIdbImages,
+  cacheIdbImage,
+  imageSrcSet,
   type PortfolioImage,
   type CategoryInfo,
 } from '@/lib/data/portfolio'
+import { idbSaveImage } from '@/lib/imageDb'
 import {
   getLocationsForCity,
   DEFAULT_LOCATIONS,
@@ -971,17 +975,26 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
 
     if (supabase) {
       try {
-        const { error } = await supabase
+        // .select() forces PostgREST to return the updated row(s) so we can tell
+        // a genuine write from an RLS policy silently matching zero rows (which
+        // otherwise "succeeds" with no error but never persists the change).
+        const { data, error } = await supabase
           .from('bookings')
           .update({
             status: newStatus,
             whatsapp_triggered: newStatus === 'confirmed' ? true : currentBooking.whatsappTriggered
           })
           .eq('id', id)
+          .select('id')
         if (error) throw error
+        if (!data || data.length === 0) {
+          throw new Error('Update matched no rows (check RLS policy / admin session).')
+        }
         updatedDb = true
       } catch (err) {
         console.error('Failed to update booking status in Supabase:', err)
+        alert('Could not save the status change to the database. It will not persist after refresh. Please check your admin session and try again.')
+        return
       }
     }
 
@@ -1343,7 +1356,7 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
 
   const reloadPortfolio = useCallback(() => {
     setCategories(getPortfolioCategories())
-    setPortfolioImgs(getPortfolioImages())
+    preloadIdbImages().then(() => setPortfolioImgs(getPortfolioImages()))
   }, [])
 
   useEffect(() => {
@@ -1421,7 +1434,7 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
       for (let i = 0; i < files.length; i++) {
         const file = files[i]
         const dataUrl = await optimizeToWebP(file)
-        const id = dataUrl
+        const id = `img-${crypto.randomUUID()}`
         const title = file.name.replace(/\.[^/.]+$/, '') // file name without ext
 
         const newItem: PortfolioImage = {
@@ -1441,6 +1454,11 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
             iso: '—',
           },
         }
+
+        // Store the (potentially large) data-URL in IndexedDB, not localStorage,
+        // to avoid silently hitting the ~5-10MB localStorage quota.
+        await idbSaveImage({ ...newItem, dataUrl })
+        cacheIdbImage(id, dataUrl)
         newItems.push(newItem)
       }
 
@@ -2414,11 +2432,7 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {categories.map((cat) => {
                 const catImages = portfolioImgs.filter((img) => img.category === cat.id)
-                const previewSrc = catImages[0]
-                  ? catImages[0].id.startsWith('data:') || catImages[0].id.startsWith('blob:')
-                    ? catImages[0].id
-                    : `/images/portfolio/${catImages[0].id}-sm.webp`
-                  : null
+                const previewSrc = catImages[0] ? imageSrcSet(catImages[0].id).sm : null
 
                 return (
                   <button
@@ -2601,9 +2615,7 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
                       ) : (
                         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
                           {catImages.map((img) => {
-                            const src = img.id.startsWith('data:') || img.id.startsWith('blob:')
-                              ? img.id
-                              : `/images/portfolio/${img.id}-sm.webp`
+                            const src = imageSrcSet(img.id).sm
                             return (
                               <div key={img.id} className="relative aspect-square group rounded-xl overflow-hidden border border-charcoal/08 shadow-sm">
                                 <img src={src} alt={img.title} className="w-full h-full object-cover" />

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { motion } from 'motion/react'
 import type { PortfolioImage } from '@/lib/data/portfolio'
-import { imageSrcSet } from '@/lib/data/portfolio'
+import { imageSrcSet, isInlineImage } from '@/lib/data/portfolio'
 import { Lightbox } from './Lightbox'
 import { SkeletonGrid } from '@/features/shared/components/SkeletonGrid'
 
@@ -60,8 +60,8 @@ export function MasonryGrid({ images, loading = false, pageSize = 9 }: MasonryGr
             >
               <img
                 src={src.md}
-                srcSet={img.id.startsWith('data:') || img.id.startsWith('blob:') ? undefined : `${src.sm} 480w, ${src.md} 960w, ${src.lg} 1600w`}
-                sizes={img.id.startsWith('data:') || img.id.startsWith('blob:') ? undefined : "(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"}
+                srcSet={isInlineImage(img.id) ? undefined : `${src.sm} 480w, ${src.md} 960w, ${src.lg} 1600w`}
+                sizes={isInlineImage(img.id) ? undefined : "(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"}
                 alt={img.alt}
                 loading={i < 4 ? 'eager' : 'lazy'}
                 className="w-full h-auto object-cover group-hover:scale-[1.03] transition-transform duration-[1200ms] ease-[cubic-bezier(0.16,1,0.3,1)]"

@@ -1,4 +1,5 @@
 import { storage, STORAGE_KEYS } from '@/lib/storage'
+import { idbGetAllImages, idbDeleteImage } from '@/lib/imageDb'
 
 export type PortfolioCategory = string
 
@@ -134,8 +135,39 @@ function isValidImageId(id: string): boolean {
   return (
     id.startsWith('data:') ||
     id.startsWith('blob:') ||
+    id.startsWith('img-') ||
     /^frame-\d{2}$/.test(id)
   )
+}
+
+// ─── IndexedDB image cache ───────────────────────────────────────────────────
+// Large uploaded images (data-URLs) are stored in IndexedDB (much higher quota
+// than localStorage) keyed by a short `img-*` id; only that id + metadata is
+// kept in localStorage. This cache holds the resolved data-URLs in memory so
+// `imageSrcSet()` can resolve them synchronously once loaded.
+const idbImageCache = new Map<string, string>()
+let idbCacheLoaded = false
+let idbLoadPromise: Promise<void> | null = null
+
+/** Load all IndexedDB-backed images into the in-memory cache. Safe to call repeatedly. */
+export function preloadIdbImages(): Promise<void> {
+  if (idbCacheLoaded) return Promise.resolve()
+  if (idbLoadPromise) return idbLoadPromise
+  idbLoadPromise = idbGetAllImages()
+    .then((items) => {
+      items.forEach((item) => idbImageCache.set(item.id, item.dataUrl))
+      idbCacheLoaded = true
+    })
+    .catch((err) => {
+      console.error('[portfolio] Failed to load images from IndexedDB:', err)
+      idbCacheLoaded = true
+    })
+  return idbLoadPromise
+}
+
+/** Populate the in-memory cache immediately after an upload, before the DB read-back. */
+export function cacheIdbImage(id: string, dataUrl: string): void {
+  idbImageCache.set(id, dataUrl)
 }
 
 /**
@@ -178,6 +210,8 @@ export function deletePortfolioImage(imgId: string): void {
   if (isCustom) {
     const updated = custom.filter((img) => img.id !== imgId)
     savePortfolioImages(updated)
+    idbImageCache.delete(imgId)
+    idbDeleteImage(imgId).catch((err) => console.error('[portfolio] Failed to delete image from IndexedDB:', err))
   } else {
     // If it's a static image, track its ID in deletedStaticImages so we can filter it out
     const deletedStaticIds = storage.get<string[]>(STORAGE_KEYS.deletedStaticImages) || []
@@ -191,6 +225,16 @@ export function deletePortfolioImage(imgId: string): void {
 // Keep the legacy export for compatibility where needed, but it's recommended to call getPortfolioImages()
 export const portfolioImages = staticPortfolioImages
 
+/**
+ * True for any id that resolves to an inline image src (data URL, blob URL,
+ * or an IndexedDB-cached upload) rather than a static `-sm/-md/-lg.webp`
+ * asset path — these don't have multiple pre-generated sizes, so callers
+ * should skip building a `srcSet`/`sizes` attribute for them.
+ */
+export function isInlineImage(id: string): boolean {
+  return id.startsWith('data:') || id.startsWith('blob:') || id.startsWith('img-')
+}
+
 export function imageSrcSet(id: string) {
   // If id is a base64 / data URL (custom uploaded image), return it directly for all sizes
   if (id.startsWith('data:') || id.startsWith('blob:')) {
@@ -198,6 +242,15 @@ export function imageSrcSet(id: string) {
       sm: id,
       md: id,
       lg: id,
+    }
+  }
+  // Custom uploads: resolve the actual data-URL from the IndexedDB cache.
+  if (id.startsWith('img-')) {
+    const cached = idbImageCache.get(id) || ''
+    return {
+      sm: cached,
+      md: cached,
+      lg: cached,
     }
   }
   return {

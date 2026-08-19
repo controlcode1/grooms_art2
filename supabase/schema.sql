@@ -75,6 +75,15 @@ create table if not exists public.bookings (
 
 alter table public.bookings enable row level security;
 
+-- Defensive: drop any legacy check constraint that predates the 'approved'
+-- status (e.g. one created manually via the dashboard UI before this file
+-- was updated) and re-add one covering all current statuses. Silently
+-- rejected 'approved' updates due to a stale constraint were the root cause
+-- of bookings reverting to 'confirmed' after a page refresh.
+alter table public.bookings drop constraint if exists bookings_status_check;
+alter table public.bookings add constraint bookings_status_check
+  check (status in ('pending', 'confirmed', 'rejected', 'approved'));
+
 drop policy if exists "Public insert bookings" on public.bookings;
 create policy "Public insert bookings" on public.bookings
   for insert with check (true);

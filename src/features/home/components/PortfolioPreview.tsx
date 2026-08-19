@@ -1,10 +1,10 @@
-import { useState, useMemo } from 'react'
+import { useState, useEffect } from 'react'
 import { Link } from '@tanstack/react-router'
 import { motion } from 'motion/react'
 import { clsx } from 'clsx'
 import { useI18n } from '@/lib/i18n'
 import { Section, Eyebrow } from '@/features/shared/components/Section'
-import { imageSrcSet, getPortfolioImages } from '@/lib/data/portfolio'
+import { imageSrcSet, getPortfolioImages, preloadIdbImages } from '@/lib/data/portfolio'
 
 const PREVIEW_IDS = ['frame-03', 'frame-10', 'frame-07', 'frame-18', 'frame-22', 'frame-25']
 
@@ -12,17 +12,25 @@ export function PortfolioPreview() {
   const { t, locale } = useI18n()
   const [activeIdx, setActiveIdx] = useState<number | null>(null)
 
-  const previewImages = useMemo(() => {
-    const allImgs = getPortfolioImages()
-    const activePreview = PREVIEW_IDS.map((id) =>
-      allImgs.find((img) => img.id === id),
-    ).filter(Boolean) as typeof allImgs
+  // Start empty so the very first client render matches the server (which has
+  // no access to localStorage/IndexedDB) — populated client-side after mount
+  // to avoid a hydration mismatch.
+  const [previewImages, setPreviewImages] = useState<ReturnType<typeof getPortfolioImages>>([])
 
-    if (activePreview.length < 6) {
-      const remaining = allImgs.filter((img) => !activePreview.some((ap) => ap.id === img.id))
-      return [...activePreview, ...remaining].slice(0, 6)
-    }
-    return activePreview
+  useEffect(() => {
+    preloadIdbImages().then(() => {
+      const allImgs = getPortfolioImages()
+      const activePreview = PREVIEW_IDS.map((id) =>
+        allImgs.find((img) => img.id === id),
+      ).filter(Boolean) as typeof allImgs
+
+      if (activePreview.length < 6) {
+        const remaining = allImgs.filter((img) => !activePreview.some((ap) => ap.id === img.id))
+        setPreviewImages([...activePreview, ...remaining].slice(0, 6))
+      } else {
+        setPreviewImages(activePreview)
+      }
+    })
   }, [])
 
   return (
