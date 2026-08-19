@@ -68,34 +68,7 @@ export const DEFAULT_CATEGORIES: CategoryInfo[] = [
   { id: 'cinematic', name: 'Cinematic Shorts', nameAr: 'الأفلام السينمائية' },
 ]
 
-export const staticPortfolioImages: PortfolioImage[] = Array.from(
-  { length: 30 },
-  (_, i) => {
-    const num = String(i + 1).padStart(2, '0')
-    const id = `frame-${num}`
-    const title = TITLES[id] ?? `Chapter ${num}`
-    const category: PortfolioCategory = PORTRAIT_FRAMES.has(id)
-      ? 'portrait'
-      : 'wedding'
-    return {
-      id,
-      slug: title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''),
-      title,
-      alt: `${title} — editorial elopement session in the highlands, natural light`,
-      category,
-      partOfFullDay: true,
-      orientation: id === 'frame-30' ? 'portrait' : 'landscape',
-      exif: {
-        camera: 'Sony A7 IV',
-        lens: '35mm f/1.4 GM',
-        focalLength: '35mm',
-        aperture: i % 3 === 0 ? 'f/1.8' : 'f/2.2',
-        shutter: i % 2 === 0 ? '1/500s' : '1/1000s',
-        iso: i % 4 === 0 ? 'ISO 100' : 'ISO 200',
-      },
-    }
-  },
-)
+export const staticPortfolioImages: PortfolioImage[] = []
 
 // ─── Dynamic Getters (Interfacing with storage) ──────────────────────────────
 

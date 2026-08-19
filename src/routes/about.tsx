@@ -22,7 +22,6 @@ import { useHeaderTheme } from '@/lib/hooks/useHeaderTheme'
 
 function AboutPage() {
   const { t, locale } = useI18n()
-  const heroImg = imageSrcSet('frame-08')
   useHeaderTheme('light')
 
   return (
@@ -30,9 +29,7 @@ function AboutPage() {
       {/* ─── Hero Image Block ─── */}
       <div className="relative w-full h-[55vh] md:h-[65vh] min-h-[380px] overflow-hidden bg-charcoal">
         <motion.img
-          src={heroImg.lg}
-          srcSet={`${heroImg.sm} 480w, ${heroImg.md} 960w, ${heroImg.lg} 1440w`}
-          sizes="100vw"
+          src="/images/about-hero.jpg"
           alt="Grooms Art — editorial wedding photography"
           className="absolute inset-0 w-full h-full object-cover"
           loading="eager"

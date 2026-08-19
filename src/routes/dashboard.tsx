@@ -898,6 +898,22 @@ function getFinalConfirmationWhatsAppLink(b: Booking): string {
   return `https://wa.me/${cleanPhone}?text=${encodeURIComponent(messageText)}`
 }
 
+function getReminderWhatsAppLink(b: Booking): string {
+  const cleanPhone = formatWhatsAppPhone(b.customerInfo.phone)
+  const pkgName = PACKAGE_NAMES[b.packageId] ?? b.packageId
+  const messageText =
+    ` Grooms Art Studio\n` +
+    ` Session Reminder / تذكير بالجلسة\n\n` +
+    `Hi ${b.customerInfo.fullName}!\n` +
+    `مرحباً ${b.customerInfo.fullName}!\n\n` +
+    `Your session is coming up on ${b.date}.\n` +
+    `جلستكم  بتاريخ ${b.date}.\n\n` +
+    `Package / الباقة: ${pkgName}\n\n` +
+    `We can't wait to capture your moments!`
+
+  return `https://wa.me/${cleanPhone}?text=${encodeURIComponent(messageText)}`
+}
+
 function Dashboard({ onLogout }: { onLogout: () => void }) {
   const { locale, toggleLocale } = useI18n()
   const d = locale === 'ar' ? DASHBOARD_T.ar : DASHBOARD_T.en
@@ -1010,14 +1026,14 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
     setBookings(updated)
   }
 
-  const handleWelcomeSend = (b: Booking) => {
+  const handleWelcomeSend = async (b: Booking) => {
     window.open(getWelcomeWhatsAppLink(b), '_blank')
-    updateBookingStatus(b.id, 'confirmed')
+    await updateBookingStatus(b.id, 'confirmed')
   }
 
-  const handleFinalSend = (b: Booking) => {
+  const handleFinalSend = async (b: Booking) => {
     window.open(getFinalConfirmationWhatsAppLink(b), '_blank')
-    updateBookingStatus(b.id, 'approved')
+    await updateBookingStatus(b.id, 'approved')
   }
 
   // ─── Upcoming Bookings (3-day rolling window: Today, Tomorrow, Day After Tomorrow) ───
@@ -1563,18 +1579,33 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
                         </p>
                       </div>
 
-                      <div className="pt-3 border-t border-charcoal/10 flex items-center justify-between">
+                      <div className="pt-3 border-t border-charcoal/10 flex items-center justify-between gap-2 flex-wrap">
                         <a href={`tel:${ub.customerInfo.phone}`} className="font-sans text-xs text-forest font-semibold hover:underline">
                           {ub.customerInfo.phone}
                         </a>
-                        <span className={clsx(
-                          'font-sans text-[10px] tracking-wider uppercase px-2.5 py-0.5 rounded-md font-semibold',
-                          ub.status === 'pending' && 'bg-amber-100 text-amber-900 border border-amber-200',
-                          ub.status === 'confirmed' && 'bg-blue-100 text-blue-900 border border-blue-200',
-                          ub.status === 'approved' && 'bg-emerald-100 text-emerald-900 border border-emerald-200',
-                        )}>
-                          {d[ub.status as keyof typeof d] || ub.status}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className={clsx(
+                            'font-sans text-[10px] tracking-wider uppercase px-2.5 py-0.5 rounded-md font-semibold',
+                            ub.status === 'pending' && 'bg-amber-100 text-amber-900 border border-amber-200',
+                            ub.status === 'confirmed' && 'bg-blue-100 text-blue-900 border border-blue-200',
+                            ub.status === 'approved' && 'bg-emerald-100 text-emerald-900 border border-emerald-200',
+                          )}>
+                            {d[ub.status as keyof typeof d] || ub.status}
+                          </span>
+                          <a
+                            href={getReminderWhatsAppLink(ub)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            title="Send  Reminder via WhatsApp"
+                            className="inline-flex items-center gap-1 font-sans text-[10px] tracking-wider uppercase px-2.5 py-0.5 rounded-md font-semibold bg-green-100 text-green-800 border border-green-200 hover:bg-green-200 transition-colors"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor">
+                              <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
+                              <path d="M12 0C5.373 0 0 5.373 0 12c0 2.123.554 4.116 1.524 5.847L0 24l6.302-1.498A11.924 11.924 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.791 9.791 0 01-5.001-1.368l-.36-.213-3.733.887.937-3.619-.234-.373A9.77 9.77 0 012.182 12C2.182 6.57 6.57 2.182 12 2.182S21.818 6.57 21.818 12 17.43 21.818 12 21.818z"/>
+                            </svg>
+                            {locale === 'ar' ? 'تذكير' : 'Remind'}
+                          </a>
+                        </div>
                       </div>
                     </div>
                   ))}

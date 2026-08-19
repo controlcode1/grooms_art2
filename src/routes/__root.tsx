@@ -18,7 +18,7 @@ const organizationJsonLd = {
   name: 'Grooms Art',
   description:
     'Editorial wedding photography and cinematic film studio, shot in natural light.',
-  image: '/images/portfolio/frame-01-lg.webp',
+  image: '/images/fullday-bg.jpg',
   priceRange: '$$$',
   areaServed: 'Worldwide',
   sameAs: [],
@@ -44,7 +44,7 @@ export const Route = createRootRoute({
           'Organic luxury wedding photography and cinematic film, shot in natural light.',
       },
       { property: 'og:type', content: 'website' },
-      { property: 'og:image', content: '/images/portfolio/frame-01-lg.webp' },
+      { property: 'og:image', content: '/images/fullday-bg.jpg' },
       { name: 'twitter:card', content: 'summary_large_image' },
       { name: 'theme-color', content: '#12372A' },
     ],

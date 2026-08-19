@@ -15,7 +15,7 @@ export function Footer() {
         <img
           src="/images/footer-bg.jpg"
           alt="Footer Background"
-          className="absolute inset-0 w-full h-full object-cover object-center blur-[4px] scale-105 brightness-[0.42] contrast-[1.08] pointer-events-none"
+          className="absolute inset-0 w-full h-full object-cover object-center blur-[1px] scale-105 brightness-[0.55] contrast-[1.05] pointer-events-none"
         />
 
         {/* Warm Cinematic Gradient Overlay for Maximum Readability */}
@@ -30,9 +30,9 @@ export function Footer() {
 
       {/* ─── 2. GLOBAL FOOTER CONTENT & HIGH-CONTRAST TYPOGRAPHY ─── */}
       <Section className="relative z-10 py-16 md:py-20">
-        <div className="grid grid-cols-1 md:grid-cols-[1.5fr_1fr_1.1fr_1fr] gap-10 md:gap-12">
+        <div className="grid grid-cols-2 md:grid-cols-[1.5fr_1fr_1.1fr_1fr] gap-10 md:gap-12">
           {/* Brand Intro & Tagline */}
-          <div className="space-y-4">
+          <div className="col-span-2 md:col-span-1 space-y-4">
             <Link to="/" className="inline-block transition-opacity duration-300 hover:opacity-90">
               <img
                 src="/images/logo.png"
@@ -47,7 +47,7 @@ export function Footer() {
           </div>
 
           {/* Navigation Links */}
-          <div>
+          <div className="col-span-1">
             <p className="font-sans text-[10px] tracking-[0.26em] uppercase text-cream/45 mb-4 font-semibold">
               {t.footer.navigate}
             </p>
@@ -88,7 +88,7 @@ export function Footer() {
           </div>
 
           {/* Studio Details */}
-          <div>
+          <div className="col-span-1">
             <p className="font-sans text-[10px] tracking-[0.26em] uppercase text-cream/45 mb-4 font-semibold">
               {t.footer.studio}
             </p>
@@ -98,8 +98,8 @@ export function Footer() {
                   studio@groomsart.com
                 </a>
               </li>
-              <li className="hover:text-white transition-colors duration-300 font-sans" dir="ltr">
-                <a href="tel:+9647700000000" className="hover:underline text-left">
+              <li className="hover:text-white transition-colors duration-300 font-sans">
+                <a href="tel:+9647700000000" className="hover:underline inline-block" dir="ltr">
                   +964 (770) 000-0000
                 </a>
               </li>
@@ -110,7 +110,7 @@ export function Footer() {
           </div>
 
           {/* Connect / Socials */}
-          <div>
+          <div className="col-span-2 md:col-span-1">
             <p className="font-sans text-[10px] tracking-[0.26em] uppercase text-cream/45 mb-4 font-semibold">
               {t.footer.connect}
             </p>
@@ -127,22 +127,22 @@ export function Footer() {
               </li>
               <li>
                 <a
-                  href="https://pinterest.com"
+                  href="https://facebook.com"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="hover:text-white transition-all duration-300 inline-block hover:translate-x-1 rtl:hover:-translate-x-1"
                 >
-                  Pinterest
+                  Facebook
                 </a>
               </li>
               <li>
                 <a
-                  href="https://vimeo.com"
+                  href="https://tiktok.com"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="hover:text-white transition-all duration-300 inline-block hover:translate-x-1 rtl:hover:-translate-x-1"
                 >
-                  Vimeo
+                  TikTok
                 </a>
               </li>
             </ul>
