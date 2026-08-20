@@ -34,9 +34,9 @@ const CITIES = [
 
 import { useHeaderTheme } from '@/lib/hooks/useHeaderTheme'
 
-export function CityStep({ selected, onSelect }: CityStepProps) {
+export function CityStep({ selected, onSelect, wizardType }: CityStepProps) {
   const { t, locale } = useI18n()
-  const bgImage = '/images/fullday-bg.jpg'
+  const bgImage = wizardType === 'session' ? '/images/sessions-bg.jpg' : '/images/fullday-bg.jpg'
   useHeaderTheme('light')
 
   return (

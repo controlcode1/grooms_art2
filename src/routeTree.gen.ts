@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as BookSessionRouteImport } from './routes/book-session'
+import { Route as ContactRouteImport } from './routes/contact'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as FullDayRouteImport } from './routes/full-day'
 import { Route as SessionsRouteImport } from './routes/sessions'
@@ -31,6 +32,11 @@ const AboutRoute = AboutRouteImport.update({
 const BookSessionRoute = BookSessionRouteImport.update({
   id: '/book-session',
   path: '/book-session',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ContactRoute = ContactRouteImport.update({
+  id: '/contact',
+  path: '/contact',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DashboardRoute = DashboardRouteImport.update({
@@ -63,6 +69,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/book-session': typeof BookSessionRoute
+  '/contact': typeof ContactRoute
   '/dashboard': typeof DashboardRoute
   '/full-day': typeof FullDayRoute
   '/sessions': typeof SessionsRoute
@@ -73,6 +80,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/book-session': typeof BookSessionRoute
+  '/contact': typeof ContactRoute
   '/dashboard': typeof DashboardRoute
   '/full-day': typeof FullDayRoute
   '/sessions': typeof SessionsRoute
@@ -84,6 +92,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/book-session': typeof BookSessionRoute
+  '/contact': typeof ContactRoute
   '/dashboard': typeof DashboardRoute
   '/full-day': typeof FullDayRoute
   '/sessions': typeof SessionsRoute
@@ -96,6 +105,7 @@ export interface FileRouteTypes {
     | '/'
     | '/about'
     | '/book-session'
+    | '/contact'
     | '/dashboard'
     | '/full-day'
     | '/sessions'
@@ -106,6 +116,7 @@ export interface FileRouteTypes {
     | '/'
     | '/about'
     | '/book-session'
+    | '/contact'
     | '/dashboard'
     | '/full-day'
     | '/sessions'
@@ -116,6 +127,7 @@ export interface FileRouteTypes {
     | '/'
     | '/about'
     | '/book-session'
+    | '/contact'
     | '/dashboard'
     | '/full-day'
     | '/sessions'
@@ -127,6 +139,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AboutRoute: typeof AboutRoute
   BookSessionRoute: typeof BookSessionRoute
+  ContactRoute: typeof ContactRoute
   DashboardRoute: typeof DashboardRoute
   FullDayRoute: typeof FullDayRoute
   SessionsRoute: typeof SessionsRoute
@@ -155,6 +168,13 @@ declare module '@tanstack/react-router' {
       path: '/book-session'
       fullPath: '/book-session'
       preLoaderRoute: typeof BookSessionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/contact': {
+      id: '/contact'
+      path: '/contact'
+      fullPath: '/contact'
+      preLoaderRoute: typeof ContactRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/dashboard': {
@@ -199,6 +219,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AboutRoute: AboutRoute,
   BookSessionRoute: BookSessionRoute,
+  ContactRoute: ContactRoute,
   DashboardRoute: DashboardRoute,
   FullDayRoute: FullDayRoute,
   SessionsRoute: SessionsRoute,

@@ -84,6 +84,14 @@ export function Footer() {
                   {locale === 'ar' ? 'عن الاستوديو' : 'About Us'}
                 </Link>
               </li>
+              <li>
+                <Link
+                  to="/contact"
+                  className="hover:text-white transition-all duration-300 inline-block hover:translate-x-1 rtl:hover:-translate-x-1 drop-shadow-xs"
+                >
+                  {locale === 'ar' ? 'اتصل بنا' : 'Contact Us'}
+                </Link>
+              </li>
             </ul>
           </div>
 
@@ -117,7 +125,7 @@ export function Footer() {
             <ul className="flex flex-col gap-2.5 font-sans text-xs sm:text-sm text-cream/80">
               <li>
                 <a
-                  href="https://instagram.com"
+                  href="https://www.instagram.com/grooms_art?igsi=bG5zd3JxcGNoeGw0"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="hover:text-white transition-all duration-300 inline-block hover:translate-x-1 rtl:hover:-translate-x-1"
@@ -127,7 +135,7 @@ export function Footer() {
               </li>
               <li>
                 <a
-                  href="https://facebook.com"
+                  href="https://www.facebook.com/share/1LjaCqJf4e/?mibextid=wwXIfr"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="hover:text-white transition-all duration-300 inline-block hover:translate-x-1 rtl:hover:-translate-x-1"
@@ -137,7 +145,7 @@ export function Footer() {
               </li>
               <li>
                 <a
-                  href="https://tiktok.com"
+                  href="https://www.tiktok.com/@abusajida97?_r=1&_t=ZS-992A8AcoF0x"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="hover:text-white transition-all duration-300 inline-block hover:translate-x-1 rtl:hover:-translate-x-1"

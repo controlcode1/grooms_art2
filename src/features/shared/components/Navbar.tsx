@@ -11,6 +11,7 @@ const links = [
   { to: '/full-day', key: 'fullDay' as const },
   { to: '/sessions', key: 'sessions' as const },
   { to: '/about', key: 'about' as const },
+  { to: '/contact', key: 'contact' as const },
 ]
 
 export function Navbar() {

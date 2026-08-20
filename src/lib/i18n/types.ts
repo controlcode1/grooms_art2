@@ -9,6 +9,7 @@ export interface Dictionary {
     fullDay: string
     sessions: string
     about: string
+    contact: string
     book: string
     menu: string
     close: string
@@ -81,6 +82,37 @@ export interface Dictionary {
     equipmentTitle: string
     equipmentBody: string
     teamTitle: string
+  }
+  contact: {
+    eyebrow: string
+    title: string
+    subtitle: string
+    getInTouch: string
+    locationTitle: string
+    locationBaghdad: string
+    locationErbil: string
+    phoneTitle: string
+    emailTitle: string
+    hoursTitle: string
+    hoursValue: string
+    formTitle: string
+    formSubtitle: string
+    nameLabel: string
+    namePlaceholder: string
+    emailLabel: string
+    emailPlaceholder: string
+    phoneLabel: string
+    phonePlaceholder: string
+    subjectLabel: string
+    subjectPlaceholder: string
+    messageLabel: string
+    messagePlaceholder: string
+    submitButton: string
+    submitting: string
+    successTitle: string
+    successMessage: string
+    errorMessage: string
+    feedbackNote: string
   }
   booking: {
     eyebrow: string

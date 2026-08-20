@@ -15,7 +15,7 @@ export const Route = createFileRoute('/sessions')({
     links: [
       {
         rel: 'preload',
-        href: '/images/fullday-bg.jpg',
+        href: '/images/sessions-bg.jpg',
         as: 'image',
         fetchPriority: 'high',
       } as any,

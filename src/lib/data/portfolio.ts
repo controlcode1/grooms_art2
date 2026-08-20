@@ -440,6 +440,55 @@ export async function deletePortfolioImage(imgId: string): Promise<void> {
   }
 }
 
+/**
+ * Update an existing portfolio image metadata (e.g. title/name, alt, category, etc.).
+ */
+export async function updatePortfolioImage(
+  imgId: string,
+  updates: Partial<Pick<PortfolioImage, 'title' | 'alt' | 'category' | 'slug' | 'orientation' | 'partOfFullDay'>>
+): Promise<PortfolioImage | null> {
+  // 1. Update in Supabase if configured
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const dbUpdates: Record<string, any> = {}
+      if (updates.title !== undefined) dbUpdates.title = updates.title
+      if (updates.alt !== undefined) dbUpdates.alt = updates.alt
+      if (updates.category !== undefined) dbUpdates.category = updates.category
+      if (updates.slug !== undefined) dbUpdates.slug = updates.slug
+      if (updates.orientation !== undefined) dbUpdates.orientation = updates.orientation
+      if (updates.partOfFullDay !== undefined) dbUpdates.part_of_full_day = updates.partOfFullDay
+
+      const { error } = await supabase
+        .from('portfolio_images')
+        .update(dbUpdates)
+        .eq('id', imgId)
+
+      if (error) {
+        console.error('[portfolio] Failed to update image in Supabase:', error)
+      }
+    } catch (err) {
+      console.error('[portfolio] Error updating image in Supabase:', err)
+    }
+  }
+
+  // 2. Update in local storage
+  const custom = storage.get<PortfolioImage[]>(STORAGE_KEYS.portfolioImages) || []
+  let updatedImg: PortfolioImage | null = null
+  const updatedList = custom.map((img) => {
+    if (img.id === imgId) {
+      updatedImg = {
+        ...img,
+        ...updates,
+      }
+      return updatedImg
+    }
+    return img
+  })
+
+  storage.set(STORAGE_KEYS.portfolioImages, updatedList)
+  return updatedImg
+}
+
 // Keep the legacy export for compatibility where needed, but it's recommended to call getPortfolioImages()
 export const portfolioImages = staticPortfolioImages
 

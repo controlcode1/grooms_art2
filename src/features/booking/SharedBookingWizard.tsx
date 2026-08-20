@@ -433,7 +433,7 @@ function getValidISODateOrToday(input: string | null | undefined): { dbDate: str
       <PageHero
         title={defaultHeroTitle}
         subtitle={defaultHeroSubtitle}
-        image={heroImage || '/images/fullday-bg.jpg'}
+        image={heroImage || (type === 'session' ? '/images/sessions-bg.jpg' : '/images/fullday-bg.jpg')}
       />
       <Section className="py-12 md:py-20">
         {content}

@@ -13,6 +13,7 @@ import {
   savePortfolioCategories,
   DEFAULT_CATEGORIES,
   deletePortfolioImage as apiDeletePortfolioImage,
+  updatePortfolioImage as apiUpdatePortfolioImage,
   deletePortfolioCategory as apiDeletePortfolioCategory,
   preloadIdbImages,
   cacheIdbImage,
@@ -1450,6 +1451,36 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
     setPortfolioImgs(await getPortfolioImages())
   }
 
+  const [editingImage, setEditingImage] = useState<PortfolioImage | null>(null)
+  const [editImageTitle, setEditImageTitle] = useState('')
+  const [savingImageTitle, setSavingImageTitle] = useState(false)
+
+  const handleStartEditImage = (img: PortfolioImage) => {
+    setEditingImage(img)
+    setEditImageTitle(img.title || '')
+  }
+
+  const handleSaveImageTitle = async () => {
+    if (!editingImage || !editImageTitle.trim()) return
+    setSavingImageTitle(true)
+    try {
+      const newTitle = editImageTitle.trim()
+      const newSlug = newTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
+      await apiUpdatePortfolioImage(editingImage.id, {
+        title: newTitle,
+        slug: newSlug || editingImage.slug,
+        alt: `${newTitle} - portfolio`,
+      })
+      setPortfolioImgs(await getPortfolioImages())
+      setEditingImage(null)
+    } catch (err) {
+      console.error(err)
+      alert(locale === 'ar' ? 'فشل حفظ الاسم الجديد' : 'Failed to update image name')
+    } finally {
+      setSavingImageTitle(false)
+    }
+  }
+
   const handleImageUpload = async (catId: string, files: FileList | null) => {
     if (!files || files.length === 0) return
     setUploading(true)
@@ -2692,16 +2723,56 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
                           {catImages.map((img) => {
                             const src = imageSrcSet(img.id).sm
                             return (
-                              <div key={img.id} className="relative aspect-square group rounded-xl overflow-hidden border border-charcoal/08 shadow-sm">
-                                <img src={src} alt={img.title} className="w-full h-full object-cover" />
-                                <div className="absolute inset-0 bg-charcoal/45 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-all duration-200">
-                                  <button
-                                    type="button"
-                                    onClick={() => deletePortfolioImage(img.id)}
-                                    className="font-sans text-[9px] tracking-widest uppercase bg-red-600 text-cream px-3 py-1.5 rounded-lg"
-                                  >
-                                    {locale === 'ar' ? 'حذف' : 'Delete'}
-                                  </button>
+                              <div
+                                key={img.id}
+                                onClick={() => handleStartEditImage(img)}
+                                className="relative group rounded-xl overflow-hidden border border-charcoal/10 bg-sand/20 shadow-xs flex flex-col cursor-pointer transition-all duration-300 hover:shadow-md hover:border-forest/40"
+                              >
+                                <div className="relative aspect-square overflow-hidden bg-charcoal/05">
+                                  <img
+                                    src={src}
+                                    alt={img.title}
+                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                                  />
+                                  {/* Action Buttons Overlay */}
+                                  <div className="absolute inset-0 bg-gradient-to-t from-charcoal/80 via-charcoal/30 to-transparent opacity-0 group-hover:opacity-100 flex flex-col justify-end p-2 transition-all duration-200 gap-1.5">
+                                    <div className="flex items-center gap-1.5 justify-center">
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation()
+                                          handleStartEditImage(img)
+                                        }}
+                                        className="font-sans text-[10px] font-semibold tracking-wider uppercase bg-white text-charcoal hover:bg-cream px-2 py-1 rounded-md shadow-sm flex items-center gap-1 transition"
+                                        title={locale === 'ar' ? 'تعديل الاسم' : 'Edit Name'}
+                                      >
+                                        <span>✏️</span>
+                                        <span>{locale === 'ar' ? 'تعديل' : 'Rename'}</span>
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation()
+                                          deletePortfolioImage(img.id)
+                                        }}
+                                        className="font-sans text-[10px] font-semibold tracking-wider uppercase bg-red-600 text-white hover:bg-red-700 px-2 py-1 rounded-md shadow-sm flex items-center gap-1 transition"
+                                        title={locale === 'ar' ? 'حذف الصورة' : 'Delete Image'}
+                                      >
+                                        <span>🗑️</span>
+                                        <span>{locale === 'ar' ? 'حذف' : 'Delete'}</span>
+                                      </button>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* Caption Bar showing Image Title */}
+                                <div className="p-2 bg-white flex items-center justify-between gap-1 border-t border-charcoal/06">
+                                  <span className="font-sans text-xs text-charcoal/80 font-medium truncate" title={img.title}>
+                                    {img.title || (locale === 'ar' ? 'بدون اسم' : 'Untitled')}
+                                  </span>
+                                  <span className="text-[10px] text-charcoal/30 group-hover:text-forest transition-colors shrink-0">
+                                    ✏️
+                                  </span>
                                 </div>
                               </div>
                             )
@@ -2715,6 +2786,100 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
             })()}
           </div>
         )}
+
+        {/* ─── Edit Image Name & Details Modal ─── */}
+        <AnimatePresence>
+          {editingImage && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-charcoal/70 backdrop-blur-sm">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+                className="bg-white w-full max-w-md rounded-2xl p-6 sm:p-7 shadow-2xl border border-charcoal/10 relative"
+              >
+                <button
+                  type="button"
+                  onClick={() => setEditingImage(null)}
+                  className="absolute top-4 right-4 rtl:right-auto rtl:left-4 w-8 h-8 rounded-full flex items-center justify-center text-charcoal/50 hover:text-charcoal hover:bg-charcoal/06 transition-colors text-base"
+                >
+                  ✕
+                </button>
+
+                <h3 className="font-serif text-xl sm:text-2xl text-charcoal font-semibold mb-1">
+                  {locale === 'ar' ? 'تعديل اسم الصورة' : 'Edit Image Name'}
+                </h3>
+                <p className="font-sans text-xs text-charcoal/60 mb-4">
+                  {locale === 'ar'
+                    ? 'يمكنك تغيير اسم وعنوان الصورة ليظهر في المعرض بشكل مناسب.'
+                    : 'Update the image name and title as it appears in the portfolio.'}
+                </p>
+
+                {/* Image Preview Thumbnail */}
+                <div className="w-full h-44 rounded-xl overflow-hidden mb-4 bg-charcoal/05 border border-charcoal/10 flex items-center justify-center">
+                  <img
+                    src={imageSrcSet(editingImage.id).sm}
+                    alt={editingImage.title}
+                    className="w-full h-full object-contain"
+                  />
+                </div>
+
+                {/* Name Input */}
+                <div className="mb-6">
+                  <label className="block font-sans text-xs font-semibold uppercase tracking-wider text-charcoal/70 mb-2">
+                    {locale === 'ar' ? 'اسم الصورة / العنوان' : 'Image Name / Title'}
+                  </label>
+                  <input
+                    type="text"
+                    value={editImageTitle}
+                    onChange={(e) => setEditImageTitle(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleSaveImageTitle()
+                    }}
+                    autoFocus
+                    placeholder={locale === 'ar' ? 'أدخل اسم الصورة...' : 'Enter image title...'}
+                    className="w-full px-4 py-2.5 rounded-xl border border-charcoal/20 bg-sand/10 font-sans text-sm text-charcoal focus:outline-none focus:border-forest focus:ring-1 focus:ring-forest transition-all"
+                  />
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex items-center justify-between gap-3 pt-2 border-t border-charcoal/08">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const idToDelete = editingImage.id
+                      setEditingImage(null)
+                      deletePortfolioImage(idToDelete)
+                    }}
+                    className="font-sans text-xs font-semibold uppercase tracking-wider text-red-600 hover:text-red-700 px-3 py-2 rounded-lg hover:bg-red-50 transition"
+                  >
+                    {locale === 'ar' ? 'حذف الصورة' : 'Delete'}
+                  </button>
+
+                  <div className="flex items-center gap-2.5">
+                    <button
+                      type="button"
+                      onClick={() => setEditingImage(null)}
+                      className="font-sans text-xs tracking-wider uppercase px-4 py-2 rounded-xl border border-charcoal/20 text-charcoal/70 hover:bg-charcoal/05 transition"
+                    >
+                      {locale === 'ar' ? 'إلغاء' : 'Cancel'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSaveImageTitle}
+                      disabled={savingImageTitle || !editImageTitle.trim()}
+                      className="font-sans text-xs font-semibold tracking-wider uppercase px-5 py-2 rounded-xl bg-forest text-cream hover:bg-forest/90 transition shadow-xs disabled:opacity-50"
+                    >
+                      {savingImageTitle
+                        ? (locale === 'ar' ? 'جاري الحفظ…' : 'Saving…')
+                        : (locale === 'ar' ? 'حفظ التعديل' : 'Save Name')}
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
       </main>
 
       {/* ─── Storage Toast Notification ─── */}

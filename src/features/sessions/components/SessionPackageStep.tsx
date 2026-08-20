@@ -21,7 +21,6 @@ export function SessionPackageStep({ selected, city, onSelect }: SessionPackageS
   const { t, locale } = useI18n()
   const [packages, setPackages] = useState<Package[]>([])
   const [loading, setLoading] = useState(true)
-  const [activeModalPkg, setActiveModalPkg] = useState<Package | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -373,17 +372,7 @@ export function SessionPackageStep({ selected, city, onSelect }: SessionPackageS
                         ))}
                       </div>
 
-                      <div className="grid grid-cols-2 gap-2.5">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            setActiveModalPkg(pkg)
-                          }}
-                          className="font-sans text-xs tracking-wider uppercase border border-charcoal/20 text-charcoal/75 py-2.5 rounded-xl bg-linen/40 hover:bg-linen transition-colors text-center font-medium"
-                        >
-                          {locale === 'ar' ? 'التفاصيل' : 'Details'}
-                        </button>
+                      <div className="pt-2">
                         <button
                           type="button"
                           onClick={(e) => {
@@ -391,13 +380,13 @@ export function SessionPackageStep({ selected, city, onSelect }: SessionPackageS
                             onSelect(pkg.package_key)
                           }}
                           className={clsx(
-                            'font-sans text-xs tracking-wider uppercase py-2.5 rounded-xl border transition-colors text-center font-medium shadow-xs',
+                            'w-full font-sans text-xs tracking-wider uppercase py-3 rounded-xl border transition-colors text-center font-medium shadow-xs',
                             isSelected
                               ? 'bg-forest border-forest text-cream'
                               : 'border-forest text-forest hover:bg-forest hover:text-cream',
                           )}
                         >
-                          {isSelected ? (locale === 'ar' ? 'تم الاختيار' : 'Selected') : (locale === 'ar' ? 'اختيار' : 'Select')}
+                          {isSelected ? (locale === 'ar' ? 'تم الاختيار' : 'Selected') : (locale === 'ar' ? 'اختيار هذه الباقة' : 'Select Package')}
                         </button>
                       </div>
                     </motion.div>
@@ -408,116 +397,6 @@ export function SessionPackageStep({ selected, city, onSelect }: SessionPackageS
           })}
         </div>
       )}
-
-      {/* 3. DETAIL MODAL */}
-      <AnimatePresence>
-        {activeModalPkg && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-charcoal/70 backdrop-blur-sm">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.96, y: 10 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.96, y: 10 }}
-              transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-              className="bg-[#FAFAF7] w-full max-w-lg rounded-3xl p-6 sm:p-8 shadow-2xl border border-charcoal/10 max-h-[88vh] overflow-y-auto flex flex-col text-center relative"
-            >
-              <button
-                type="button"
-                onClick={() => setActiveModalPkg(null)}
-                className="absolute top-4 right-4 rtl:right-auto rtl:left-4 w-9 h-9 rounded-full flex items-center justify-center text-charcoal/50 hover:text-charcoal hover:bg-charcoal/06 transition-colors text-base z-10"
-                aria-label="Close modal"
-              >
-                ✕
-              </button>
-
-              {(() => {
-                const name = getPackageDisplayName(activeModalPkg, locale)
-                const desc = getPackageDisplayDescription(activeModalPkg, locale)
-                const badge = getPackageDisplayBadge(activeModalPkg, locale)
-                const featureGroups = getPackageDisplayFeatures(activeModalPkg, locale)
-
-                return (
-                  <>
-                    {/* Header: Badge, Package Title, Price, Description */}
-                    <div className="flex flex-col items-center pt-2 pb-2">
-                      {badge && (
-                        <span className="inline-block font-sans text-[9px] tracking-[0.22em] uppercase px-3.5 py-1 rounded-full bg-white border border-charcoal/10 text-charcoal/75 font-semibold mb-3 shadow-xs">
-                          {badge}
-                        </span>
-                      )}
-
-                      <h3 className="font-serif text-3xl sm:text-4xl text-charcoal font-medium tracking-tight">
-                        {name}
-                      </h3>
-
-                      <p className="font-serif text-3xl sm:text-4xl text-forest font-normal mt-2">
-                        ${activeModalPkg.price.toLocaleString()}
-                      </p>
-
-                      {desc && (
-                        <p className="font-sans text-xs sm:text-sm text-charcoal/65 mt-3 max-w-md mx-auto leading-relaxed">
-                          {desc}
-                        </p>
-                      )}
-                    </div>
-
-                    <div className="w-12 h-px bg-forest/25 mx-auto my-3" />
-
-                    {/* Vertically Stacked & Centered Sections */}
-                    <div className="space-y-6 flex-1 overflow-y-auto py-3 px-1">
-                      {featureGroups.map((group, gIdx) => (
-                        <div key={gIdx} className="space-y-2 text-center">
-                          {group.title && (
-                            <h4 className="font-sans text-[11px] tracking-[0.22em] uppercase text-forest font-bold">
-                              {group.title}
-                            </h4>
-                          )}
-                          <div className="space-y-1">
-                            {group.items.map((item, itemIdx) => {
-                              const isHeader = item.startsWith('—') || item.startsWith('-')
-                              const isBullet = item.startsWith('•') || item.startsWith('*')
-                              const cleanedItem = isHeader
-                                ? item.slice(1).trim()
-                                : isBullet
-                                  ? item.slice(1).trim()
-                                  : item
-
-                              return (
-                                <p key={itemIdx} className={clsx(
-                                  'font-sans text-xs sm:text-sm leading-relaxed',
-                                  isHeader
-                                    ? 'text-forest font-semibold mt-3 text-[10px] uppercase tracking-wider'
-                                    : 'text-charcoal/80'
-                                )}>
-                                  {cleanedItem}
-                                </p>
-                              )
-                            })}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-
-                    <div className="pt-4 border-t border-charcoal/08 mt-2">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          onSelect(activeModalPkg.package_key)
-                          setActiveModalPkg(null)
-                        }}
-                        className="w-full text-center font-sans text-xs tracking-[0.18em] uppercase py-4 rounded-xl bg-forest text-cream border border-forest hover:bg-forest-deep transition-colors font-medium shadow-sm"
-                      >
-                        {selected === activeModalPkg.package_key
-                          ? (locale === 'ar' ? 'الباقة مختارة بالفعل' : 'Package Already Selected')
-                          : (locale === 'ar' ? 'اختيار هذه الباقة' : 'Select this Package')}
-                      </button>
-                    </div>
-                  </>
-                )
-              })()}
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
     </div>
   )
 }
