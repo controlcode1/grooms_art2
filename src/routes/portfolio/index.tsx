@@ -141,14 +141,14 @@ function PortfolioPage() {
       {totalImages === 0 ? (
         <EmptyState title={t.portfolio.emptyTitle} body={t.portfolio.emptyBody} />
       ) : (
-        <div className="space-y-20">
+        <div className="space-y-14 md:space-y-20">
           {sections.map((section) => (
             <div key={section.id}>
               {/* Section label — shown only when "All" is selected or there is >1 section */}
               {(filter === 'all' || sections.length > 1) && (
-                <div className="flex items-center gap-4 mb-8">
-                  <h2 className="font-serif text-2xl md:text-3xl text-charcoal">{section.label}</h2>
-                  <span className="font-sans text-[11px] text-charcoal/35 uppercase tracking-wider">
+                <div className="flex items-center gap-3 md:gap-4 mb-5 md:mb-8">
+                  <h2 className="font-serif text-xl sm:text-2xl md:text-3xl text-charcoal">{section.label}</h2>
+                  <span className="font-sans text-[10px] sm:text-[11px] text-charcoal/40 uppercase tracking-wider">
                     {section.images.length} {locale === 'ar' ? 'صورة' : 'photos'}
                   </span>
                   <div className="flex-1 h-px bg-charcoal/08" />

@@ -30,9 +30,9 @@ export function Footer() {
 
       {/* ─── 2. GLOBAL FOOTER CONTENT & HIGH-CONTRAST TYPOGRAPHY ─── */}
       <Section className="relative z-10 py-16 md:py-20">
-        <div className="grid grid-cols-2 md:grid-cols-[1.5fr_1fr_1.1fr_1fr] gap-10 md:gap-12">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-[1.8fr_1fr_1fr] gap-10 md:gap-16">
           {/* Brand Intro & Tagline */}
-          <div className="col-span-2 md:col-span-1 space-y-4">
+          <div className="sm:col-span-2 md:col-span-1 space-y-4">
             <Link to="/" className="inline-block transition-opacity duration-300 hover:opacity-90">
               <img
                 src="/images/logo.png"
@@ -95,30 +95,8 @@ export function Footer() {
             </ul>
           </div>
 
-          {/* Studio Details */}
-          <div className="col-span-1">
-            <p className="font-sans text-[10px] tracking-[0.26em] uppercase text-cream/45 mb-4 font-semibold">
-              {t.footer.studio}
-            </p>
-            <ul className="flex flex-col gap-2.5 font-sans text-xs sm:text-sm text-cream/75 leading-relaxed">
-              <li className="hover:text-white transition-colors duration-300">
-                <a href="mailto:studio@groomsart.com" className="hover:underline">
-                  studio@groomsart.com
-                </a>
-              </li>
-              <li className="hover:text-white transition-colors duration-300 font-sans">
-                <a href="tel:+9647700000000" className="hover:underline inline-block" dir="ltr">
-                  +964 (770) 000-0000
-                </a>
-              </li>
-              <li className="text-cream/55">
-                {locale === 'ar' ? 'بحجز مسبق، في جميع أنحاء العالم' : 'By appointment, worldwide'}
-              </li>
-            </ul>
-          </div>
-
           {/* Connect / Socials */}
-          <div className="col-span-2 md:col-span-1">
+          <div className="col-span-1">
             <p className="font-sans text-[10px] tracking-[0.26em] uppercase text-cream/45 mb-4 font-semibold">
               {t.footer.connect}
             </p>

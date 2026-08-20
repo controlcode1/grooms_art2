@@ -136,7 +136,10 @@ export function PortfolioPreview() {
       </div>
 
       {/* 2. MOBILE TOUCH-FRIENDLY SCROLLABLE ACCORDION */}
-      <div className="flex md:hidden flex-row gap-4 overflow-x-auto snap-x snap-mandatory pb-4 pt-1 no-scrollbar">
+      <div
+        className="flex md:hidden flex-row gap-4 overflow-x-auto snap-x snap-mandatory pb-4 pt-1 no-scrollbar [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+      >
         {previewImages.map((img) => {
           const src = imageSrcSet(img.id)
           return (

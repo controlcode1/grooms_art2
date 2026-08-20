@@ -555,29 +555,135 @@ export const fullDayChapters = [
   { key: 'evening', frames: staticPortfolioImages.slice(24, 30) },
 ] as const
 
-export const testimonials = [
+// ─── Testimonial type ─────────────────────────────────────────────────────────
+export interface Testimonial {
+  id: string
+  names: string
+  namesAr?: string
+  quote: string
+  quoteAr?: string
+  location: string
+  locationAr?: string
+  order?: number
+}
+
+const DEFAULT_TESTIMONIALS: Testimonial[] = [
   {
     id: 't1',
     names: 'Layla & Omar',
+    namesAr: 'ليلى وعمر',
     quote:
       'They disappeared into the background and somehow captured every real moment — the nerves, the laugh we didn\u2019t plan, the walk up the ridge at sunset. It still feels like our actual day, not a performance of it.',
+    quoteAr:
+      'اختفوا في الخلفية وبطريقة ما التقطوا كل لحظة حقيقية — الارتباك والضحكة التي لم نخطط لها والمشي على سفح الجبل عند الغروب. لا تزال الصور تبدو وكأنها يومنا الحقيقي، لا أداءً مسرحياً.',
     location: 'Destination Elopement',
+    locationAr: 'زواج في وجهة خاصة',
+    order: 0,
   },
   {
     id: 't2',
     names: 'Noor & Adam',
+    namesAr: 'نور وآدم',
     quote:
       'We almost skipped professional photography. We\u2019re so glad we didn\u2019t. The gallery reads like a film — quiet, honest, completely us.',
+    quoteAr:
+      'كدنا نتخلى عن التصوير الاحترافي. سعداء جداً لأننا لم نفعل. المعرض يشبه فيلماً — هادئاً وصادقاً، هو نحن تماماً.',
     location: 'Full Day Wedding',
+    locationAr: 'حفل زفاف يوم كامل',
+    order: 1,
   },
   {
     id: 't3',
     names: 'Rana & Zaid',
+    namesAr: 'رنا وزيد',
     quote:
       'No forced poses, no cheesy backdrops — just light, land, and two people. Months later, the photographs still make us feel something.',
+    quoteAr:
+      'لا وضعيات مفتعلة ولا خلفيات مبتذلة — فقط ضوء وأرض وشخصان. بعد أشهر، لا تزال الصور تولّد شعوراً ما.',
     location: 'Highlands Session',
+    locationAr: 'جلسة المرتفعات',
+    order: 2,
   },
 ]
+
+// ─── Testimonial Storage Helpers ──────────────────────────────────────────────
+const TESTIMONIALS_KEY = 'ga_testimonials'
+
+export function getTestimonialsSync(): Testimonial[] {
+  try {
+    const stored = storage.get<Testimonial[]>(TESTIMONIALS_KEY)
+    if (stored && stored.length > 0) return stored
+  } catch {}
+  return DEFAULT_TESTIMONIALS
+}
+
+export async function getTestimonials(): Promise<Testimonial[]> {
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const { data, error } = await supabase
+        .from('testimonials')
+        .select('*')
+        .order('order', { ascending: true })
+      if (!error && data && data.length > 0) {
+        const mapped: Testimonial[] = data.map((row: any) => ({
+          id: row.id,
+          names: row.names,
+          namesAr: row.names_ar || '',
+          quote: row.quote,
+          quoteAr: row.quote_ar || '',
+          location: row.location,
+          locationAr: row.location_ar || '',
+          order: row.order ?? 0,
+        }))
+        storage.set(TESTIMONIALS_KEY, mapped)
+        return mapped
+      }
+    } catch (err) {
+      console.warn('[testimonials] Supabase fetch failed, using local:', err)
+    }
+  }
+  return getTestimonialsSync()
+}
+
+export async function saveTestimonial(t: Testimonial): Promise<void> {
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const { error } = await supabase.from('testimonials').upsert({
+        id: t.id,
+        names: t.names,
+        names_ar: t.namesAr || '',
+        quote: t.quote,
+        quote_ar: t.quoteAr || '',
+        location: t.location,
+        location_ar: t.locationAr || '',
+        order: t.order ?? 0,
+      })
+      if (error) console.error('[testimonials] upsert error:', error)
+    } catch (err) {
+      console.error('[testimonials] save failed:', err)
+    }
+  }
+  // Also persist locally
+  const all = getTestimonialsSync()
+  const idx = all.findIndex((x) => x.id === t.id)
+  if (idx >= 0) all[idx] = t
+  else all.push(t)
+  storage.set(TESTIMONIALS_KEY, all)
+}
+
+export async function deleteTestimonial(id: string): Promise<void> {
+  if (isSupabaseConfigured && supabase) {
+    try {
+      await supabase.from('testimonials').delete().eq('id', id)
+    } catch (err) {
+      console.error('[testimonials] delete failed:', err)
+    }
+  }
+  const all = getTestimonialsSync().filter((t) => t.id !== id)
+  storage.set(TESTIMONIALS_KEY, all)
+}
+
+export const testimonials = DEFAULT_TESTIMONIALS
 
 export const packages = [
   {

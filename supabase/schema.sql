@@ -197,3 +197,31 @@ drop policy if exists "Allow admin manage contact_messages" on public.contact_me
 create policy "Allow admin manage contact_messages" on public.contact_messages
   for all using (public.is_admin()) with check (public.is_admin());
 
+-- ---------------------------------------------------------------------------
+-- 7. Testimonials (Kind Words section on home page)
+-- ---------------------------------------------------------------------------
+create table if not exists public.testimonials (
+  id           text primary key,
+  names        text not null,
+  names_ar     text not null default '',
+  quote        text not null,
+  quote_ar     text not null default '',
+  location     text not null default '',
+  location_ar  text not null default '',
+  "order"      integer not null default 0,
+  created_at   timestamptz not null default now(),
+  updated_at   timestamptz not null default now()
+);
+
+alter table public.testimonials enable row level security;
+
+-- Public can read testimonials
+drop policy if exists "Allow public read testimonials" on public.testimonials;
+create policy "Allow public read testimonials" on public.testimonials
+  for select using (true);
+
+-- Only authenticated admins can insert/update/delete
+drop policy if exists "Allow admin manage testimonials" on public.testimonials;
+create policy "Allow admin manage testimonials" on public.testimonials
+  for all using (public.is_admin()) with check (public.is_admin());
+

@@ -2,19 +2,13 @@ interface SkeletonGridProps {
   count?: number
 }
 
-/**
- * Organic skeleton screen matching the masonry portfolio grid — varied
- * heights so the loading state doesn't read as a mechanical, repeating unit.
- */
-export function SkeletonGrid({ count = 9 }: SkeletonGridProps) {
-  const heights = ['h-64', 'h-80', 'h-96', 'h-72']
-
+export function SkeletonGrid({ count = 12 }: SkeletonGridProps) {
   return (
-    <div className="columns-2 sm:columns-2 lg:columns-3 gap-4 [column-fill:_balance]">
+    <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-6">
       {Array.from({ length: count }).map((_, i) => (
         <div
           key={i}
-          className={`skeleton mb-4 break-inside-avoid rounded-lg ${heights[i % heights.length]}`}
+          className="skeleton aspect-[3/4] rounded-xl sm:rounded-2xl"
         />
       ))}
     </div>

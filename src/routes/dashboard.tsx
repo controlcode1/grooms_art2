@@ -22,6 +22,10 @@ import {
   STORAGE_LIMIT_BYTES,
   type PortfolioImage,
   type CategoryInfo,
+  getTestimonials,
+  saveTestimonial,
+  deleteTestimonial,
+  type Testimonial,
 } from '@/lib/data/portfolio'
 import { idbSaveImage } from '@/lib/imageDb'
 import { getPresignedUploadUrl } from '@/lib/r2'
@@ -56,7 +60,7 @@ export const Route = createFileRoute('/dashboard')({
 // ─── Constants ──────────────────────────────────────────────────────────────
 const MONTH_FORMATTER = new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' })
 
-type DashboardTab = 'bookings' | 'availability' | 'packages' | 'portfolio'
+type DashboardTab = 'bookings' | 'availability' | 'packages' | 'portfolio' | 'kindWords'
 
 // ─── Client-side WebP Image Optimization ─────────────────────────────────────
 async function optimizeToWebP(file: File): Promise<string> {
@@ -745,6 +749,20 @@ const DASHBOARD_T = {
     rename: 'Rename',
     save: 'Save',
     cancel: 'Cancel',
+    // Kind Words
+    kindWords: 'Kind Words',
+    kindWordsDesc: 'Add and manage testimonials shown in the home page ‘Kind Words’ section.',
+    addTestimonial: '+ Add New Review',
+    editTestimonial: 'Edit Review',
+    namesEn: 'Names (English)',
+    namesAr: 'Names (Arabic)',
+    quoteEn: 'Quote / Review (English)',
+    quoteAr: 'Quote / Review (Arabic)',
+    locationEn: 'Occasion / Location (English)',
+    locationAr: 'Occasion / Location (Arabic)',
+    saveTestimonial: 'Save',
+    deleteTestimonial: 'Delete',
+    noTestimonials: 'No reviews yet. Add your first one above.',
   },
   ar: {
     bookings: 'الحجوزات',
@@ -831,6 +849,20 @@ const DASHBOARD_T = {
     rename: 'إعادة تسمية',
     save: 'حفظ',
     cancel: 'إلغاء',
+    // Kind Words
+    kindWords: 'الكلمات الطيبة',
+    kindWordsDesc: 'أضف وأدر التقييمات التي تظهر في قسم “كلمات صادقة” على الصفحة الرئيسية.',
+    addTestimonial: '+ إضافة تقييم جديد',
+    editTestimonial: 'تعديل التقييم',
+    namesEn: 'الأسماء (بالإنجليزية)',
+    namesAr: 'الأسماء (بالعربية)',
+    quoteEn: 'التقييم (بالإنجليزية)',
+    quoteAr: 'التقييم (بالعربية)',
+    locationEn: 'المناسبة / الموقع (بالإنجليزية)',
+    locationAr: 'المناسبة / الموقع (بالعربية)',
+    saveTestimonial: 'حفظ',
+    deleteTestimonial: 'حذف',
+    noTestimonials: 'لا توجد تقييمات بعد. أضف أول تقييم أعلاه.',
   },
 }
 
@@ -930,6 +962,24 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
   // ─── State for Bookings ───
   const [bookings, setBookings] = useState<Booking[]>([])
   const [bookingFilter, setBookingFilter] = useState<'all' | 'pending' | 'confirmed' | 'approved'>('all')
+  // Track which booking IDs have had reminders sent (persisted in localStorage)
+  const [sentReminders, setSentReminders] = useState<Set<string>>(() => {
+    try {
+      const stored = localStorage.getItem('ga_sent_reminders')
+      return stored ? new Set(JSON.parse(stored)) : new Set()
+    } catch {
+      return new Set()
+    }
+  })
+
+  const markReminderSent = (bookingId: string) => {
+    setSentReminders((prev) => {
+      const next = new Set(prev)
+      next.add(bookingId)
+      try { localStorage.setItem('ga_sent_reminders', JSON.stringify([...next])) } catch {}
+      return next
+    })
+  }
 
   const reloadBookings = useCallback(async () => {
     if (supabase) {
@@ -1361,6 +1411,39 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
   const storageToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [activeCatModal, setActiveCatModal] = useState<string | null>(null) // category id open in modal
 
+  // ─── State for Kind Words ───
+  const [testimonials, setTestimonials] = useState<Testimonial[]>([])
+  const [editingTestimonial, setEditingTestimonial] = useState<Testimonial | null>(null)
+  const [savingTestimonial, setSavingTestimonial] = useState(false)
+  const BLANK_TESTIMONIAL: Omit<Testimonial, 'id'> = { names: '', namesAr: '', quote: '', quoteAr: '', location: '', locationAr: '', order: 0 }
+  const [testimonialForm, setTestimonialForm] = useState<Omit<Testimonial, 'id'>>(BLANK_TESTIMONIAL)
+
+  const reloadTestimonials = useCallback(() => {
+    getTestimonials().then(setTestimonials)
+  }, [])
+
+  const handleSaveTestimonial = async () => {
+    if (!testimonialForm.names.trim() || !testimonialForm.quote.trim()) return
+    setSavingTestimonial(true)
+    try {
+      const id = editingTestimonial?.id ?? `t-${Date.now()}`
+      const order = editingTestimonial?.order ?? testimonials.length
+      await saveTestimonial({ id, ...testimonialForm, order })
+      await reloadTestimonials()
+      setEditingTestimonial(null)
+      setTestimonialForm(BLANK_TESTIMONIAL)
+    } finally {
+      setSavingTestimonial(false)
+    }
+  }
+
+  const handleDeleteTestimonial = async (id: string) => {
+    if (!confirm(locale === 'ar' ? 'هل تريد حذف هذا التقييم؟' : 'Delete this review?')) return
+    await deleteTestimonial(id)
+    reloadTestimonials()
+  }
+
+
   const reloadPortfolio = useCallback(() => {
     getPortfolioCategories().then(setCategories)
     preloadIdbImages().then(async () => {
@@ -1389,6 +1472,11 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
       if (storageToastTimerRef.current) clearTimeout(storageToastTimerRef.current)
     }
   }, [activeTab])
+
+  // Load testimonials when Kind Words tab is opened
+  useEffect(() => {
+    if (activeTab === 'kindWords') reloadTestimonials()
+  }, [activeTab, reloadTestimonials])
 
   const createCategory = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -1630,7 +1718,7 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
       <main className="max-w-6xl mx-auto px-6 md:px-10 pt-28 pb-16">
         {/* Navigation Tabs */}
         <div className="flex gap-1.5 mb-8 bg-white rounded-2xl p-1.5 border border-charcoal/15 w-fit shadow-xs overflow-x-auto max-w-full">
-          {(['bookings', 'availability', 'packages', 'portfolio'] as DashboardTab[]).map((t) => (
+          {(['bookings', 'availability', 'packages', 'portfolio', 'kindWords'] as DashboardTab[]).map((t) => (
             <button
               key={t}
               type="button"
@@ -1648,7 +1736,9 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
                   ? d.availability
                   : t === 'packages'
                     ? d.packages
-                    : d.portfolio}
+                    : t === 'portfolio'
+                      ? d.portfolio
+                      : d.kindWords}
             </button>
           ))}
         </div>
@@ -1716,19 +1806,32 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
                           )}>
                             {d[ub.status as keyof typeof d] || ub.status}
                           </span>
-                          <a
-                            href={getReminderWhatsAppLink(ub)}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            title="Send  Reminder via WhatsApp"
-                            className="inline-flex items-center gap-1 font-sans text-[10px] tracking-wider uppercase px-2.5 py-0.5 rounded-md font-semibold bg-green-100 text-green-800 border border-green-200 hover:bg-green-200 transition-colors"
-                          >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor">
-                              <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
-                              <path d="M12 0C5.373 0 0 5.373 0 12c0 2.123.554 4.116 1.524 5.847L0 24l6.302-1.498A11.924 11.924 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.791 9.791 0 01-5.001-1.368l-.36-.213-3.733.887.937-3.619-.234-.373A9.77 9.77 0 012.182 12C2.182 6.57 6.57 2.182 12 2.182S21.818 6.57 21.818 12 17.43 21.818 12 21.818z"/>
-                            </svg>
-                            {locale === 'ar' ? 'تذكير' : 'Remind'}
-                          </a>
+                          {sentReminders.has(ub.id) ? (
+                            <span
+                              title={locale === 'ar' ? 'تم إرسال التذكير' : 'Reminder already sent'}
+                              className="inline-flex items-center gap-1 font-sans text-[10px] tracking-wider uppercase px-2.5 py-0.5 rounded-md font-semibold bg-charcoal/08 text-charcoal/40 border border-charcoal/12 cursor-default select-none"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                <polyline points="20 6 9 17 4 12" />
+                              </svg>
+                              {locale === 'ar' ? 'أُرسل' : 'Sent'}
+                            </span>
+                          ) : (
+                            <a
+                              href={getReminderWhatsAppLink(ub)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              title={locale === 'ar' ? 'إرسال تذكير عبر واتساب' : 'Send Reminder via WhatsApp'}
+                              onClick={() => markReminderSent(ub.id)}
+                              className="inline-flex items-center gap-1 font-sans text-[10px] tracking-wider uppercase px-2.5 py-0.5 rounded-md font-semibold bg-green-100 text-green-800 border border-green-200 hover:bg-green-200 transition-colors"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
+                                <path d="M12 0C5.373 0 0 5.373 0 12c0 2.123.554 4.116 1.524 5.847L0 24l6.302-1.498A11.924 11.924 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.791 9.791 0 01-5.001-1.368l-.36-.213-3.733.887.937-3.619-.234-.373A9.77 9.77 0 012.182 12C2.182 6.57 6.57 2.182 12 2.182S21.818 6.57 21.818 12 17.43 21.818 12 21.818z"/>
+                              </svg>
+                              {locale === 'ar' ? 'تذكير' : 'Remind'}
+                            </a>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -2880,6 +2983,160 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
             </div>
           )}
         </AnimatePresence>
+
+        {/* ─── TAB: KIND WORDS ─── */}
+        {activeTab === 'kindWords' && (
+          <div>
+            <SectionHeading title={d.kindWords} desc={d.kindWordsDesc} />
+
+            {/* Add / Edit Form */}
+            <div className="bg-white rounded-2xl border border-charcoal/12 shadow-xs p-6 mb-8">
+              <h3 className="font-serif text-lg text-charcoal font-medium mb-5">
+                {editingTestimonial ? d.editTestimonial : d.addTestimonial}
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                {/* Names */}
+                <div>
+                  <label className="block font-sans text-[10px] font-semibold uppercase tracking-widest text-charcoal/60 mb-1.5">{d.namesEn}</label>
+                  <input
+                    type="text"
+                    value={testimonialForm.names}
+                    onChange={(e) => setTestimonialForm((f) => ({ ...f, names: e.target.value }))}
+                    placeholder="Layla & Omar"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-charcoal/20 bg-sand/10 font-sans text-sm text-charcoal focus:outline-none focus:border-forest focus:ring-1 focus:ring-forest transition-all"
+                  />
+                </div>
+                <div>
+                  <label className="block font-sans text-[10px] font-semibold uppercase tracking-widest text-charcoal/60 mb-1.5">{d.namesAr}</label>
+                  <input
+                    type="text"
+                    value={testimonialForm.namesAr}
+                    onChange={(e) => setTestimonialForm((f) => ({ ...f, namesAr: e.target.value }))}
+                    placeholder="ليلى وعمر"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-charcoal/20 bg-sand/10 font-sans text-sm text-charcoal focus:outline-none focus:border-forest focus:ring-1 focus:ring-forest transition-all"
+                  />
+                </div>
+                {/* Occasion */}
+                <div>
+                  <label className="block font-sans text-[10px] font-semibold uppercase tracking-widest text-charcoal/60 mb-1.5">{d.locationEn}</label>
+                  <input
+                    type="text"
+                    value={testimonialForm.location}
+                    onChange={(e) => setTestimonialForm((f) => ({ ...f, location: e.target.value }))}
+                    placeholder="Full Day Wedding"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-charcoal/20 bg-sand/10 font-sans text-sm text-charcoal focus:outline-none focus:border-forest focus:ring-1 focus:ring-forest transition-all"
+                  />
+                </div>
+                <div>
+                  <label className="block font-sans text-[10px] font-semibold uppercase tracking-widest text-charcoal/60 mb-1.5">{d.locationAr}</label>
+                  <input
+                    type="text"
+                    value={testimonialForm.locationAr}
+                    onChange={(e) => setTestimonialForm((f) => ({ ...f, locationAr: e.target.value }))}
+                    placeholder="حفل زفاف يوم كامل"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-charcoal/20 bg-sand/10 font-sans text-sm text-charcoal focus:outline-none focus:border-forest focus:ring-1 focus:ring-forest transition-all"
+                  />
+                </div>
+                {/* Quote EN */}
+                <div className="md:col-span-2">
+                  <label className="block font-sans text-[10px] font-semibold uppercase tracking-widest text-charcoal/60 mb-1.5">{d.quoteEn}</label>
+                  <textarea
+                    rows={3}
+                    value={testimonialForm.quote}
+                    onChange={(e) => setTestimonialForm((f) => ({ ...f, quote: e.target.value }))}
+                    placeholder="They disappeared into the background..."
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-charcoal/20 bg-sand/10 font-sans text-sm text-charcoal focus:outline-none focus:border-forest focus:ring-1 focus:ring-forest transition-all resize-none"
+                  />
+                </div>
+                {/* Quote AR */}
+                <div className="md:col-span-2">
+                  <label className="block font-sans text-[10px] font-semibold uppercase tracking-widest text-charcoal/60 mb-1.5">{d.quoteAr}</label>
+                  <textarea
+                    rows={3}
+                    value={testimonialForm.quoteAr}
+                    onChange={(e) => setTestimonialForm((f) => ({ ...f, quoteAr: e.target.value }))}
+                    dir="rtl"
+                    placeholder="اختفوا في الخلفية..."
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-charcoal/20 bg-sand/10 font-sans text-sm text-charcoal focus:outline-none focus:border-forest focus:ring-1 focus:ring-forest transition-all resize-none"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={handleSaveTestimonial}
+                  disabled={savingTestimonial || !testimonialForm.names.trim() || !testimonialForm.quote.trim()}
+                  className="font-sans text-xs font-semibold tracking-wider uppercase px-6 py-2.5 rounded-xl bg-forest text-cream hover:bg-forest/90 transition shadow-xs disabled:opacity-50"
+                >
+                  {savingTestimonial ? (locale === 'ar' ? 'جاري الحفظ…' : 'Saving…') : d.saveTestimonial}
+                </button>
+                {editingTestimonial && (
+                  <button
+                    type="button"
+                    onClick={() => { setEditingTestimonial(null); setTestimonialForm(BLANK_TESTIMONIAL) }}
+                    className="font-sans text-xs tracking-wider uppercase px-4 py-2.5 rounded-xl border border-charcoal/20 text-charcoal/70 hover:bg-charcoal/05 transition"
+                  >
+                    {d.cancel}
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Testimonials List */}
+            {testimonials.length === 0 ? (
+              <p className="font-sans text-xs text-charcoal/40 py-10 text-center">{d.noTestimonials}</p>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                {testimonials.map((item, idx) => (
+                  <div key={item.id} className="bg-white rounded-2xl border border-charcoal/10 p-5 shadow-xs flex flex-col gap-3 group">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <p className="font-serif text-base text-charcoal font-medium">{item.names}</p>
+                        {item.namesAr && <p className="font-sans text-xs text-charcoal/50 mt-0.5" dir="rtl">{item.namesAr}</p>}
+                        <p className="font-sans text-[10px] tracking-wider uppercase text-forest/80 mt-1">{item.location}</p>
+                      </div>
+                      <span className="font-sans text-[10px] text-charcoal/30 bg-charcoal/05 rounded-lg px-2 py-1 shrink-0">#{idx + 1}</span>
+                    </div>
+                    <blockquote className="font-serif text-sm text-charcoal/75 italic leading-relaxed border-l-2 border-sage/40 pl-3">
+                      {item.quote}
+                    </blockquote>
+                    {item.quoteAr && (
+                      <blockquote className="font-sans text-xs text-charcoal/50 leading-relaxed border-r-2 border-sage/30 pr-3 text-right" dir="rtl">
+                        {item.quoteAr}
+                      </blockquote>
+                    )}
+                    <div className="flex items-center gap-2 pt-2 border-t border-charcoal/08">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingTestimonial(item)
+                          setTestimonialForm({
+                            names: item.names, namesAr: item.namesAr || '',
+                            quote: item.quote, quoteAr: item.quoteAr || '',
+                            location: item.location, locationAr: item.locationAr || '',
+                            order: item.order ?? idx,
+                          })
+                          window.scrollTo({ top: 0, behavior: 'smooth' })
+                        }}
+                        className="font-sans text-[10px] font-semibold tracking-wider uppercase px-3 py-1.5 rounded-lg border border-charcoal/20 text-charcoal/70 hover:bg-charcoal/05 transition"
+                      >
+                        {d.editTestimonial}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteTestimonial(item.id)}
+                        className="font-sans text-[10px] font-semibold tracking-wider uppercase px-3 py-1.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition"
+                      >
+                        {d.deleteTestimonial}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </main>
 
       {/* ─── Storage Toast Notification ─── */}
