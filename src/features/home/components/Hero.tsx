@@ -26,16 +26,14 @@ export function Hero() {
           muted
           loop
           playsInline
-          /**
-           * preload="none" tells the browser NOT to download video bytes until
-           * playback starts — the poster image acts as the LCP element instead.
-           * Autoplay still fires immediately on desktop/mobile once the browser
-           * is ready, but the poster renders instantly with zero network cost.
-           */
           preload="none"
           poster={HERO_POSTER_SRC}
-          src={HERO_VIDEO_SRC}
-        />
+        >
+          {/* WebM VP9 served first — ~50% smaller than MP4 on modern browsers */}
+          <source src="/videos/hero.webm" type="video/webm" />
+          {/* MP4 H.264 fallback for Safari / older browsers */}
+          <source src={HERO_VIDEO_SRC} type="video/mp4" />
+        </video>
       ) : (
         <div
           className="absolute inset-0"

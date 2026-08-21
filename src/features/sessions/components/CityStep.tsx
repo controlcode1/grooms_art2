@@ -1,4 +1,4 @@
-import { motion } from 'motion/react'
+﻿import { motion } from 'motion/react'
 import { clsx } from 'clsx'
 import { useI18n } from '@/lib/i18n'
 
@@ -36,7 +36,7 @@ import { useHeaderTheme } from '@/lib/hooks/useHeaderTheme'
 
 export function CityStep({ selected, onSelect, wizardType }: CityStepProps) {
   const { t, locale } = useI18n()
-  const bgImage = wizardType === 'session' ? '/images/sessions-bg.jpg' : '/images/fullday-bg.jpg'
+  const bgImage = wizardType === 'session' ? '/images/sessions-bg.webp' : '/images/fullday-bg.webp'
   useHeaderTheme('light')
 
   return (

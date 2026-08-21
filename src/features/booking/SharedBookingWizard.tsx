@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react'
+﻿import { useState, useMemo, useEffect } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { clsx } from 'clsx'
 import { useI18n } from '@/lib/i18n'
@@ -446,7 +446,7 @@ function getValidISODateOrToday(input: string | null | undefined): { dbDate: str
       <PageHero
         title={defaultHeroTitle}
         subtitle={defaultHeroSubtitle}
-        image={heroImage || (type === 'session' ? '/images/sessions-bg.jpg' : '/images/fullday-bg.jpg')}
+        image={heroImage || (type === 'session' ? '/images/sessions-bg.webp' : '/images/fullday-bg.webp')}
       />
       <Section className="py-12 md:py-20">
         {content}

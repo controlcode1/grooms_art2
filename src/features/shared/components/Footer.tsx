@@ -13,8 +13,10 @@ export function Footer() {
       <div className="absolute inset-0 overflow-hidden pointer-events-none z-0 select-none">
         {/* Background Image with subtle blur & slight scale to eliminate edge artifacts */}
         <img
-          src="/images/footer-bg.jpg"
-          alt="Footer Background"
+          src="/images/footer-bg.webp"
+          alt=""
+          aria-hidden="true"
+          loading="lazy"
           className="absolute inset-0 w-full h-full object-cover object-center blur-[1px] scale-105 brightness-[0.55] contrast-[1.05] pointer-events-none"
         />
 

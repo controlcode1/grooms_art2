@@ -1,4 +1,4 @@
-import { createFileRoute } from '@tanstack/react-router'
+﻿import { createFileRoute } from '@tanstack/react-router'
 import { Section } from '@/features/shared/components/Section'
 import { SessionsWizard } from '@/features/sessions/SessionsWizard'
 
@@ -15,7 +15,7 @@ export const Route = createFileRoute('/sessions')({
     links: [
       {
         rel: 'preload',
-        href: '/images/sessions-bg.jpg',
+        href: '/images/sessions-bg.webp',
         as: 'image',
         fetchPriority: 'high',
       } as any,

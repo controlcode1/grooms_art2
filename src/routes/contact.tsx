@@ -1,4 +1,4 @@
-import { createFileRoute } from '@tanstack/react-router'
+﻿import { createFileRoute } from '@tanstack/react-router'
 import { useState } from 'react'
 import { motion } from 'motion/react'
 import { clsx } from 'clsx'
@@ -20,7 +20,7 @@ export const Route = createFileRoute('/contact')({
     links: [
       {
         rel: 'preload',
-        href: '/images/contact-bg.jpg',
+        href: '/images/contact-bg.webp',
         as: 'image',
         fetchPriority: 'high',
       } as any,
@@ -81,7 +81,7 @@ function ContactPage() {
       {/* ─── Hero Cover Image ─── */}
       <div className="relative w-full h-[50vh] sm:h-[55vh] md:h-[60vh] lg:h-[65vh] xl:h-[70vh] min-h-[360px] md:min-h-[440px] max-h-[750px] overflow-hidden bg-charcoal">
         <motion.img
-          src="/images/contact-bg.jpg"
+          src="/images/contact-bg.webp"
           alt="Grooms Art — Contact & Studio"
           className="absolute inset-0 w-full h-full object-cover object-center md:object-[center_35%]"
           loading="eager"

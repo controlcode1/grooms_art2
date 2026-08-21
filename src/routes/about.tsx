@@ -1,4 +1,4 @@
-import { createFileRoute } from '@tanstack/react-router'
+﻿import { createFileRoute } from '@tanstack/react-router'
 import { motion } from 'motion/react'
 import { Section, Eyebrow } from '@/features/shared/components/Section'
 import { imageSrcSet } from '@/lib/data/portfolio'
@@ -29,7 +29,7 @@ function AboutPage() {
       {/* ─── Hero Image Block ─── */}
       <div className="relative w-full h-[55vh] md:h-[65vh] min-h-[380px] overflow-hidden bg-charcoal">
         <motion.img
-          src="/images/about-hero.jpg"
+          src="/images/about-hero.webp"
           alt="Grooms Art — editorial wedding photography"
           className="absolute inset-0 w-full h-full object-cover"
           loading="eager"

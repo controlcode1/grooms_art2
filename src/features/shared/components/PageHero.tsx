@@ -1,4 +1,4 @@
-import { motion } from 'motion/react'
+﻿import { motion } from 'motion/react'
 import { clsx } from 'clsx'
 import { useHeaderTheme } from '@/lib/hooks/useHeaderTheme'
 
@@ -13,7 +13,7 @@ interface PageHeroProps {
 export function PageHero({
   title,
   subtitle,
-  image = '/images/fullday-bg.jpg',
+  image = '/images/fullday-bg.webp',
   height = 'h-[42vh] sm:h-[48vh] md:h-[55vh]',
   className,
 }: PageHeroProps) {

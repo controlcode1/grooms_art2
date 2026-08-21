@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+﻿import type { ReactNode } from 'react'
 import {
   Outlet,
   Link,
@@ -18,7 +18,7 @@ const organizationJsonLd = {
   name: 'Grooms Art',
   description:
     'Editorial wedding photography and cinematic film studio, shot in natural light.',
-  image: '/images/fullday-bg.jpg',
+  image: '/images/fullday-bg.webp',
   priceRange: '$$$',
   areaServed: 'Worldwide',
   sameAs: [],
@@ -44,7 +44,7 @@ export const Route = createRootRoute({
           'Organic luxury wedding photography and cinematic film, shot in natural light.',
       },
       { property: 'og:type', content: 'website' },
-      { property: 'og:image', content: '/images/fullday-bg.jpg' },
+      { property: 'og:image', content: '/images/fullday-bg.webp' },
       { name: 'twitter:card', content: 'summary_large_image' },
       { name: 'theme-color', content: '#12372A' },
     ],

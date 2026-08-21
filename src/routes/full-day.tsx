@@ -1,4 +1,4 @@
-import { createFileRoute } from '@tanstack/react-router'
+﻿import { createFileRoute } from '@tanstack/react-router'
 import { FullDayPackages } from '@/features/full-day/components/FullDayPackages'
 
 export const Route = createFileRoute('/full-day')({
@@ -14,7 +14,7 @@ export const Route = createFileRoute('/full-day')({
     links: [
       {
         rel: 'preload',
-        href: '/images/fullday-bg.jpg',
+        href: '/images/fullday-bg.webp',
         as: 'image',
         fetchPriority: 'high',
       } as any,

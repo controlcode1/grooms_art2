@@ -7,7 +7,8 @@
     "dev": "vite dev --port 3000",
     "build": "vite build",
     "start": "node .output/server/index.mjs",
-    "images:optimize": "node scripts/optimize-images.mjs"
+    "images:optimize": "node scripts/optimize-images.mjs",
+    "assets:optimize": "node scripts/optimize-site-assets.mjs"
   },
   "keywords": [],
   "author": "",
