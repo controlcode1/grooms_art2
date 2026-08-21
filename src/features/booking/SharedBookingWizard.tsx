@@ -12,6 +12,7 @@ import { getLocationsForCity, type Location } from '@/lib/data/locations'
 import { storage, STORAGE_KEYS } from '@/lib/storage'
 import type { Booking, BookingType } from '@/lib/types/booking'
 import { supabase } from '@/lib/supabase/client'
+import { fetchBlockedDates } from '@/features/booking/availability'
 
 type Step = 'city' | 'package' | 'location' | 'date' | 'customerInfo' | 'confirm'
 const STEPS: Step[] = ['city', 'package', 'location', 'date', 'customerInfo', 'confirm']
@@ -114,11 +115,23 @@ export function SharedBookingWizard({
           : selectedLocationObj.name
         : '—'
 
-  const blockedDatesArray = storage.get<string[]>(STORAGE_KEYS.blockedDates) || []
-  const fullyBookedArray = storage.get<string[]>('ga_fully_booked_dates') || []
-  const blockedDatesSet = useMemo(() => {
-    return new Set([...blockedDatesArray, ...fullyBookedArray])
-  }, [blockedDatesArray, fullyBookedArray])
+  const [blockedDatesSet, setBlockedDatesSet] = useState<Set<string>>(() => {
+    const bArray = storage.get<string[]>(STORAGE_KEYS.blockedDates) || []
+    const fArray = storage.get<string[]>('ga_fully_booked_dates') || []
+    return new Set([...bArray, ...fArray])
+  })
+
+  useEffect(() => {
+    let isMounted = true
+    fetchBlockedDates().then(({ blocked, fullyBooked }) => {
+      if (isMounted) {
+        setBlockedDatesSet(new Set([...blocked, ...fullyBooked]))
+      }
+    })
+    return () => {
+      isMounted = false
+    }
+  }, [])
 
   const canContinue =
     (step === 'city' && !!state.city) ||

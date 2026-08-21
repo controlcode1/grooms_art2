@@ -3,7 +3,7 @@ import type { Dictionary } from '../types'
 export const en: Dictionary = {
   meta: {
     siteName: 'Grooms Art',
-    tagline: 'Editorial wedding photography & cinematic films',
+    tagline: 'Timeless Wedding Stories & Cinematic Films',
   },
   nav: {
     home: 'Home',
@@ -18,18 +18,18 @@ export const en: Dictionary = {
   },
   home: {
     heroEyebrow: 'Grooms Art Studio',
-    heroTitle: 'Vows, wandered\ninto the wild.',
+    heroTitle: 'Cinematic narratives\nfor timeless vows.',
     heroSubtitle:
-      'Editorial wedding photography and cinematic film, shot in natural light — for couples who want their story told honestly.',
-    heroCta: 'View the Portfolio',
+      'Editorial wedding photography & cinematic films captured in natural light — preserving your extraordinary day with organic grace.',
+    heroCta: 'Explore Our Work',
     heroSecondaryCta: 'Book a Session',
-    introEyebrow: 'The Studio',
-    introTitle: 'Unposed moments. Timeless frames.',
+    introEyebrow: 'Studio Philosophy',
+    introTitle: 'Unscripted moments. Timeless frames.',
     introBody:
-      "We don't direct performances — we follow the light, the wind, and the quiet seconds in between. Every gallery is a chronicle of a real day, kept honest.",
-    previewEyebrow: 'Selected Work',
-    previewTitle: 'From the archive',
-    previewCta: 'See the full portfolio',
+      'We capture pure emotion through natural light and calm cinematic vision. We don’t manufacture moments — we preserve their raw elegance as they naturally unfold.',
+    previewEyebrow: 'Selected Works',
+    previewTitle: 'From Our Cinematic Archive',
+    previewCta: 'Explore Full Portfolio',
     testimonialsEyebrow: 'Kind Words',
     testimonialsTitle: 'From the couples we\u2019ve walked beside',
     footerFeedbackEyebrow: 'In Their Own Words',
@@ -84,13 +84,13 @@ export const en: Dictionary = {
       'A confirmation has been sent to your inbox. Our team will follow up within 48 hours with next steps.',
   },
   about: {
-    eyebrow: 'Our Story',
-    title: 'Behind Grooms Art',
+    eyebrow: 'Our Story & Vision',
+    title: 'The Art of Timeless Beginnings',
     intro:
-      'Grooms Art was founded on a simple belief: the truest wedding photographs are the ones nobody posed for.',
+      'At Grooms Art, we believe the purest memories are unscripted, and the greatest love stories are told through genuine emotion without pretense.',
     philosophyTitle: 'Artistic Vision',
     philosophyBody:
-      'We work in natural light wherever possible, favour wide open landscapes over studio backdrops, and let real emotion lead the frame. Every gallery we deliver reads like a chapter, not a checklist.',
+      'Guided by natural light and refined cinematic framing, we give every celebration an editorial signature that honours the depth and beauty of your day.',
     equipmentTitle: 'Equipment & Craft',
     equipmentBody:
       'Full-frame cinema cameras, prime lenses, and a deliberately small kit — so we can move quickly and stay unnoticed when it matters most.',

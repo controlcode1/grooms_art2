@@ -36,6 +36,11 @@ export interface Booking {
    * Currently a no-op — only the field is stored.
    */
   whatsappTriggered?: boolean
+
+  /**
+   * Indicates whether an upcoming reminder was sent via WhatsApp.
+   */
+  reminderSent?: boolean
 }
 
 /**

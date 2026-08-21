@@ -189,12 +189,12 @@ export function SessionPackageStep({ selected, city, onSelect }: SessionPackageS
                             )}
                             <ul className="space-y-1">
                               {group.items.map((item, itemIdx) => {
-                                const isHeader = item.startsWith('—') || item.startsWith('-')
+                                const isHeader = item.startsWith('#') || item.startsWith('—') || item.startsWith('-')
                                 const isBullet = item.startsWith('•') || item.startsWith('*')
                                 const cleanedItem = isHeader
-                                  ? item.slice(1).trim()
+                                  ? item.replace(/^[#—\-]+\s*/, '')
                                   : isBullet
-                                    ? item.slice(1).trim()
+                                    ? item.replace(/^[•\*]+\s*/, '')
                                     : item
 
                                 return (
@@ -347,12 +347,12 @@ export function SessionPackageStep({ selected, city, onSelect }: SessionPackageS
                             )}
                             <ul className="space-y-1">
                               {group.items.map((item, itemIdx) => {
-                                const isHeader = item.startsWith('—') || item.startsWith('-')
+                                const isHeader = item.startsWith('#') || item.startsWith('—') || item.startsWith('-')
                                 const isBullet = item.startsWith('•') || item.startsWith('*')
                                 const cleanedItem = isHeader
-                                  ? item.slice(1).trim()
+                                  ? item.replace(/^[#—\-]+\s*/, '')
                                   : isBullet
-                                    ? item.slice(1).trim()
+                                    ? item.replace(/^[•\*]+\s*/, '')
                                     : item
 
                                 return (

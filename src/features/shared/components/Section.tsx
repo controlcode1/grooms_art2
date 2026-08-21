@@ -6,12 +6,13 @@ interface SectionProps {
   className?: string
   children: ReactNode
   id?: string
+  dir?: 'ltr' | 'rtl' | 'auto'
 }
 
 /** Editorial section wrapper — generous vertical rhythm, consistent gutters. */
-export function Section({ as: Tag = 'section', className, children, id }: SectionProps) {
+export function Section({ as: Tag = 'section', className, children, id, dir }: SectionProps) {
   return (
-    <Tag id={id} className={clsx('px-6 md:px-12 lg:px-20', className)}>
+    <Tag id={id} dir={dir} className={clsx('px-6 md:px-12 lg:px-20', className)}>
       {children}
     </Tag>
   )

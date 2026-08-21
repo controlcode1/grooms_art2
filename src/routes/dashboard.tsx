@@ -49,6 +49,11 @@ import {
   type Package,
   type PackageFeatureGroup,
 } from '@/lib/data/packages'
+import {
+  fetchBlockedDates,
+  saveBlockedDateInDb,
+  removeBlockedDateFromDb,
+} from '@/features/booking/availability'
 
 export const Route = createFileRoute('/dashboard')({
   head: () => ({
@@ -212,7 +217,7 @@ function PackageEditorCard({
 
   const featuresCount = useMemo(() => {
     const lines = enText.split('\n').map((l) => l.trim()).filter(Boolean)
-    return lines.filter(l => !l.startsWith('—')).length
+    return lines.filter(l => !l.startsWith('#') && !l.startsWith('—') && !l.startsWith('-')).length
   }, [enText])
 
   const submitSave = async () => {
@@ -473,8 +478,8 @@ function PackageEditorCard({
             </h4>
             <p className="font-sans text-xs text-charcoal/65 mt-1 leading-relaxed text-left rtl:text-right">
               {locale === 'ar'
-                ? 'اكتب كل ميزة أو خدمة في سطر جديد. استخدم "—" قبل العنوان لإنشاء عنوان قسم جديد (مثلاً: — الألبوم).'
-                : 'Enter each feature or service on a new line. Prefix titles with "—" to create section headers (e.g., — Album).'}
+                ? 'اكتب كل ميزة أو خدمة في سطر جديد. استخدم "#" قبل العنوان لإنشاء عنوان قسم جديد (مثلاً: # الألبوم).'
+                : 'Enter each feature or service on a new line. Prefix titles with "#" to create section headers (e.g., # Album).'}
             </p>
           </div>
 
@@ -487,7 +492,7 @@ function PackageEditorCard({
                 value={enText}
                 onChange={(e) => setEnText(e.target.value)}
                 rows={10}
-                placeholder="— Album&#10;• 30x60 cm Main Album&#10;• 5 Pages&#10;&#10;— Film&#10;• 30-60 Seconds Reel"
+                placeholder="# Album&#10;• 30x60 cm Main Album&#10;• 5 Pages&#10;&#10;# Film&#10;• 30-60 Seconds Reel"
                 className="w-full font-sans text-xs text-charcoal bg-white border border-charcoal/20 rounded-xl p-4 outline-none focus:border-forest focus:ring-2 focus:ring-forest/15 resize-none leading-relaxed shadow-2xs"
               />
             </div>
@@ -500,7 +505,7 @@ function PackageEditorCard({
                 value={arText}
                 onChange={(e) => setArText(e.target.value)}
                 rows={10}
-                placeholder="— الألبوم&#10;• ألبوم رئيسي قياس 30x60 سم&#10;• 5 صفحات&#10;&#10;— الفيديو&#10;• ريل سينمائي 30-60 ثانية"
+                placeholder="# الألبوم&#10;• ألبوم رئيسي قياس 30x60 سم&#10;• 5 صفحات&#10;&#10;# الفيديو&#10;• ريل سينمائي 30-60 ثانية"
                 className="w-full font-sans text-xs text-charcoal bg-white border border-charcoal/20 rounded-xl p-4 outline-none focus:border-forest focus:ring-2 focus:ring-forest/15 resize-none leading-relaxed text-right shadow-2xs"
               />
             </div>
@@ -962,7 +967,7 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
   // ─── State for Bookings ───
   const [bookings, setBookings] = useState<Booking[]>([])
   const [bookingFilter, setBookingFilter] = useState<'all' | 'pending' | 'confirmed' | 'approved'>('all')
-  // Track which booking IDs have had reminders sent (persisted in localStorage)
+  // Track which booking IDs have had reminders sent (persisted in localStorage and Supabase)
   const [sentReminders, setSentReminders] = useState<Set<string>>(() => {
     try {
       const stored = localStorage.getItem('ga_sent_reminders')
@@ -972,13 +977,30 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
     }
   })
 
-  const markReminderSent = (bookingId: string) => {
+  const markReminderSent = async (bookingId: string) => {
+    // Immediate optimistic state update
     setSentReminders((prev) => {
       const next = new Set(prev)
       next.add(bookingId)
       try { localStorage.setItem('ga_sent_reminders', JSON.stringify([...next])) } catch {}
       return next
     })
+
+    setBookings((prev) =>
+      prev.map((b) => (b.id === bookingId ? { ...b, reminderSent: true } : b))
+    )
+
+    // Persist to Supabase database
+    if (supabase) {
+      try {
+        await supabase
+          .from('bookings')
+          .update({ reminder_sent: true })
+          .eq('id', bookingId)
+      } catch (err) {
+        console.error('Failed to update reminder_sent in Supabase:', err)
+      }
+    }
   }
 
   const reloadBookings = useCallback(async () => {
@@ -990,23 +1012,40 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
           .order('created_at', { ascending: false })
         if (error) throw error
         if (data) {
-          const mapped: Booking[] = data.map((row: any) => ({
-            id: row.id,
-            type: row.type as BookingType,
-            status: row.status as BookingStatus,
-            city: row.city,
-            packageId: row.package_id,
-            location: row.location_id || row.location || '',
-            date: row.date,
-            customerInfo: {
-              fullName: row.full_name,
-              phone: row.phone,
-              email: row.email || '',
-              notes: row.notes || '',
-            },
-            createdAt: row.created_at,
-            whatsappTriggered: row.whatsapp_triggered,
-          }))
+          const dbSentIds = new Set<string>()
+          const mapped: Booking[] = data.map((row: any) => {
+            const isReminderSent = Boolean(row.reminder_sent)
+            if (isReminderSent) {
+              dbSentIds.add(row.id)
+            }
+            return {
+              id: row.id,
+              type: row.type as BookingType,
+              status: row.status as BookingStatus,
+              city: row.city,
+              packageId: row.package_id,
+              location: row.location_id || row.location || '',
+              date: row.date,
+              customerInfo: {
+                fullName: row.full_name,
+                phone: row.phone,
+                email: row.email || '',
+                notes: row.notes || '',
+              },
+              createdAt: row.created_at,
+              whatsappTriggered: row.whatsapp_triggered,
+              reminderSent: isReminderSent,
+            }
+          })
+
+          if (dbSentIds.size > 0) {
+            setSentReminders((prev) => {
+              const merged = new Set([...prev, ...dbSentIds])
+              try { localStorage.setItem('ga_sent_reminders', JSON.stringify([...merged])) } catch {}
+              return merged
+            })
+          }
+
           setBookings(mapped)
           return
         }
@@ -1286,9 +1325,10 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
     return grid
   }, [availCursor, blockedDates, fullyBookedDates, today])
 
-  const reloadAvailability = useCallback(() => {
-    setBlockedDates(storage.get<string[]>(STORAGE_KEYS.blockedDates) || [])
-    setFullyBookedDates(storage.get<string[]>('ga_fully_booked_dates') || [])
+  const reloadAvailability = useCallback(async () => {
+    const { blocked, fullyBooked } = await fetchBlockedDates()
+    setBlockedDates(blocked)
+    setFullyBookedDates(fullyBooked)
     const storedLocs = storage.get<Record<CityId, Location[]>>(STORAGE_KEYS.locations)
     if (storedLocs) {
       setLocationsMap(storedLocs)
@@ -1301,63 +1341,58 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
     reloadAvailability()
   }, [reloadAvailability])
 
-  const blockDate = (e: React.FormEvent) => {
+  const blockDate = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!newBlockedDate) return
     if (blockedDates.includes(newBlockedDate) || fullyBookedDates.includes(newBlockedDate)) {
       alert('This date is already blocked or fully booked.')
       return
     }
-    const updated = [...blockedDates, newBlockedDate].sort()
-    storage.set(STORAGE_KEYS.blockedDates, updated)
-    setBlockedDates(updated)
+    const targetDate = newBlockedDate
     setNewBlockedDate('')
+    const updated = [...blockedDates, targetDate].sort()
+    setBlockedDates(updated)
+    await saveBlockedDateInDb(targetDate, 'blocked')
   }
 
-  const unblockDate = (dateStr: string) => {
+  const unblockDate = async (dateStr: string) => {
     const updated = blockedDates.filter((d) => d !== dateStr)
-    storage.set(STORAGE_KEYS.blockedDates, updated)
     setBlockedDates(updated)
     const updatedFully = fullyBookedDates.filter((d) => d !== dateStr)
-    storage.set('ga_fully_booked_dates', updatedFully)
     setFullyBookedDates(updatedFully)
+    await removeBlockedDateFromDb(dateStr)
   }
 
-  const toggleBlockDate = (dateStr: string) => {
-    let updated: string[]
+  const toggleBlockDate = async (dateStr: string) => {
     if (blockedDates.includes(dateStr) || fullyBookedDates.includes(dateStr)) {
-      updated = blockedDates.filter((d) => d !== dateStr)
+      const updated = blockedDates.filter((d) => d !== dateStr)
       const updatedFully = fullyBookedDates.filter((d) => d !== dateStr)
-      storage.set('ga_fully_booked_dates', updatedFully)
+      setBlockedDates(updated)
       setFullyBookedDates(updatedFully)
+      await removeBlockedDateFromDb(dateStr)
     } else {
-      updated = [...blockedDates, dateStr].sort()
+      const updated = [...blockedDates, dateStr].sort()
+      setBlockedDates(updated)
+      await saveBlockedDateInDb(dateStr, 'blocked')
     }
-    storage.set(STORAGE_KEYS.blockedDates, updated)
-    setBlockedDates(updated)
   }
 
-  const toggleFullyBooked = (dateStr: string) => {
-    let updated: string[]
+  const toggleFullyBooked = async (dateStr: string) => {
     if (fullyBookedDates.includes(dateStr)) {
-      updated = fullyBookedDates.filter((d) => d !== dateStr)
-      // If removed from fully booked, make sure it is back in blockedDates
+      const updatedFully = fullyBookedDates.filter((d) => d !== dateStr)
+      setFullyBookedDates(updatedFully)
       if (!blockedDates.includes(dateStr)) {
-        const newBlocked = [...blockedDates, dateStr].sort()
-        storage.set(STORAGE_KEYS.blockedDates, newBlocked)
-        setBlockedDates(newBlocked)
+        setBlockedDates([...blockedDates, dateStr].sort())
       }
+      await saveBlockedDateInDb(dateStr, 'blocked')
     } else {
-      updated = [...fullyBookedDates, dateStr].sort()
-      // If added to fully booked, also make sure it is in blockedDates for easy logic
+      const updatedFully = [...fullyBookedDates, dateStr].sort()
+      setFullyBookedDates(updatedFully)
       if (!blockedDates.includes(dateStr)) {
-        const newBlocked = [...blockedDates, dateStr].sort()
-        storage.set(STORAGE_KEYS.blockedDates, newBlocked)
-        setBlockedDates(newBlocked)
+        setBlockedDates([...blockedDates, dateStr].sort())
       }
+      await saveBlockedDateInDb(dateStr, 'fully_booked')
     }
-    storage.set('ga_fully_booked_dates', updated)
-    setFullyBookedDates(updated)
   }
 
   const addLocation = (e: React.FormEvent) => {
@@ -1806,7 +1841,7 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
                           )}>
                             {d[ub.status as keyof typeof d] || ub.status}
                           </span>
-                          {sentReminders.has(ub.id) ? (
+                          {sentReminders.has(ub.id) || ub.reminderSent ? (
                             <span
                               title={locale === 'ar' ? 'تم إرسال التذكير' : 'Reminder already sent'}
                               className="inline-flex items-center gap-1 font-sans text-[10px] tracking-wider uppercase px-2.5 py-0.5 rounded-md font-semibold bg-charcoal/08 text-charcoal/40 border border-charcoal/12 cursor-default select-none"
@@ -2318,7 +2353,6 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div>
                 <h2 className="font-serif text-2xl md:text-3xl text-charcoal">{d.packagesManagement}</h2>
-                <p className="font-sans text-xs text-charcoal/50 mt-1">{d.packagesManagementDesc}</p>
               </div>
 
               <button

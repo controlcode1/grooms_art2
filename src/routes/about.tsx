@@ -74,8 +74,8 @@ function AboutPage() {
 
           <p className="font-sans text-sm md:text-base text-charcoal/65 leading-relaxed">
             {locale === 'ar'
-              ? 'فريق صغير ومتعمّد من المصورين والمخرجين السينمائيين يسافر بخفة ويلتقط لحظاتك بصدق — في أي مكان، في أي موسم، في كل مكان حول العالم.'
-              : 'A small, deliberate team of photographers and cinematographers who travel light and shoot honestly — on location, in any season, anywhere in the world.'}
+              ? 'فريقنا المحترف من المصورين وصُنّاع الأفلام يرافقكم باهتمام بأدق التفاصيل في بغداد وأربيل، لنمنحكم إرثاً بصرياً تتوارثه الأجيال.'
+              : 'Our dedicated team of photographers and cinematographers accompanies you across Baghdad and Erbil, creating a timeless visual legacy to be cherished for generations.'}
           </p>
         </motion.div>
       </Section>

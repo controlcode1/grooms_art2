@@ -63,34 +63,38 @@ export function Hero() {
         }}
       />
 
-      <div className="relative z-10 flex h-full flex-col justify-end px-6 pb-16 md:px-12 md:pb-24 lg:px-20">
+      <div className="relative z-10 flex h-full flex-col justify-end px-6 pb-12 sm:pb-16 md:px-12 md:pb-20 lg:px-20 lg:pb-24">
         <motion.div
           initial={{ opacity: 0, y: 24 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 1.1, ease: [0.16, 1, 0.3, 1] }}
         >
           <h1
-            className="font-serif text-cream text-5xl leading-[1.05] md:text-7xl lg:text-8xl max-w-3xl"
+            className="font-serif text-cream text-3xl sm:text-4xl md:text-5xl lg:text-6xl max-w-2xl leading-[1.15]"
             style={{ textShadow: '0 2px 24px rgba(0,0,0,0.45), 0 1px 4px rgba(0,0,0,0.5)' }}
           >
             {heroLine1}
-            <br />
-            {heroLine2}
+            {heroLine2 && (
+              <>
+                <br />
+                {heroLine2}
+              </>
+            )}
           </h1>
-          <p className="mt-6 max-w-lg font-sans text-sm md:text-base text-cream/75 leading-relaxed">
+          <p className="mt-4 sm:mt-5 max-w-md font-sans text-xs sm:text-sm md:text-base text-cream/80 leading-relaxed">
             {t.home.heroSubtitle}
           </p>
 
-          <div className="mt-10 flex flex-wrap items-center gap-4">
+          <div className="mt-6 sm:mt-8 flex flex-wrap items-center gap-3 sm:gap-4">
             <Link
               to="/portfolio"
-              className="font-sans text-xs tracking-[0.2em] uppercase bg-cream text-charcoal px-7 py-4 rounded-lg hover:bg-white transition-colors duration-500"
+              className="font-sans text-[11px] sm:text-xs tracking-[0.18em] uppercase bg-cream text-charcoal px-5 py-3 sm:px-6 sm:py-3.5 rounded-lg hover:bg-white transition-colors duration-500 font-medium"
             >
               {t.home.heroCta}
             </Link>
             <Link
               to="/sessions"
-              className="font-sans text-xs tracking-[0.2em] uppercase border border-cream/50 text-cream px-7 py-4 rounded-lg hover:border-cream transition-colors duration-500"
+              className="font-sans text-[11px] sm:text-xs tracking-[0.18em] uppercase border border-cream/50 text-cream px-5 py-3 sm:px-6 sm:py-3.5 rounded-lg hover:border-cream transition-colors duration-500 font-medium"
             >
               {t.home.heroSecondaryCta}
             </Link>

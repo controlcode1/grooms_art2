@@ -70,10 +70,14 @@ create table if not exists public.bookings (
   email              text default '',
   notes              text default '',
   whatsapp_triggered boolean default false,
+  reminder_sent      boolean default false,
   created_at         timestamptz not null default now()
 );
 
 alter table public.bookings enable row level security;
+
+-- Defensive migration to add reminder_sent if table already exists
+alter table public.bookings add column if not exists reminder_sent boolean default false;
 
 -- Defensive: drop any legacy check constraint that predates the 'approved'
 -- status (e.g. one created manually via the dashboard UI before this file
@@ -90,6 +94,26 @@ create policy "Public insert bookings" on public.bookings
 
 drop policy if exists "Admin manage bookings" on public.bookings;
 create policy "Admin manage bookings" on public.bookings
+  for all using (public.is_admin()) with check (public.is_admin());
+
+-- ---------------------------------------------------------------------------
+-- 3.1 Blocked & Fully Booked Dates
+-- ---------------------------------------------------------------------------
+create table if not exists public.blocked_dates (
+  date        text primary key, -- 'YYYY-MM-DD'
+  status      text not null default 'blocked' check (status in ('blocked', 'fully_booked')),
+  notes       text default '',
+  created_at  timestamptz not null default now()
+);
+
+alter table public.blocked_dates enable row level security;
+
+drop policy if exists "Allow public read blocked_dates" on public.blocked_dates;
+create policy "Allow public read blocked_dates" on public.blocked_dates
+  for select using (true);
+
+drop policy if exists "Allow admin manage blocked_dates" on public.blocked_dates;
+create policy "Allow admin manage blocked_dates" on public.blocked_dates
   for all using (public.is_admin()) with check (public.is_admin());
 
 -- ---------------------------------------------------------------------------
@@ -224,4 +248,5 @@ create policy "Allow public read testimonials" on public.testimonials
 drop policy if exists "Allow admin manage testimonials" on public.testimonials;
 create policy "Allow admin manage testimonials" on public.testimonials
   for all using (public.is_admin()) with check (public.is_admin());
+
 

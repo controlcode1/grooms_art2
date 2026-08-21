@@ -103,7 +103,11 @@ function NotFoundPage() {
 function RootComponent() {
   const location = useLocation()
   const isDashboard = location.pathname.startsWith('/dashboard')
-  const hideFooter = isDashboard || location.pathname === '/full-day' || location.pathname === '/sessions'
+  const hideFooter =
+    isDashboard ||
+    location.pathname === '/full-day' ||
+    location.pathname === '/sessions' ||
+    location.pathname === '/contact'
 
   return (
     <RootDocument>
